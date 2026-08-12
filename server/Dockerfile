@@ -1,7 +1,10 @@
-# Use a slim Node.js image for production
-FROM node:22-alpine
+# Use Debian-based Node.js image (includes OpenSSL needed by Prisma)
+FROM node:22-slim
 
 WORKDIR /app
+
+# Install OpenSSL (required by Prisma)
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 # Install ALL dependencies (including devDependencies for prisma generate)
 COPY package.json package-lock.json ./
