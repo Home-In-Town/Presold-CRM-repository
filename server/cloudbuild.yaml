@@ -1,7 +1,10 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/presold-crm-server:$SHORT_SHA', '.']
+    dir: 'server'
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/presold-crm-server:$SHORT_SHA']
 images:
   - 'gcr.io/$PROJECT_ID/presold-crm-server:$SHORT_SHA'
+options:
+  logging: CLOUD_LOGGING_ONLY
