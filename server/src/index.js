@@ -101,10 +101,14 @@ app.use((err, req, res, next) => {
 });
 
 async function startServer() {
-  await ensureAdminAccount();
-
+  // Start listening first so Cloud Run health checks pass
   app.listen(PORT, () => {
     console.log(`🚀 Pre-Sold CRM server running on port ${PORT}`);
+  });
+
+  // Run admin bootstrap in background (non-blocking)
+  ensureAdminAccount().catch(err => {
+    console.error('Admin bootstrap failed (non-fatal):', err.message);
   });
 }
 
