@@ -11,7 +11,10 @@ RUN npm ci --production
 COPY prisma ./prisma
 COPY src ./src
 
-EXPOSE 5001
-ENV PORT=5001
+# Generate Prisma client
+RUN npx prisma generate
+
+EXPOSE 8080
+ENV PORT=8080
 
 CMD ["npm", "start"]
