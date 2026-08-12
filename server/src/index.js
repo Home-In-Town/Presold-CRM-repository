@@ -26,6 +26,9 @@ import dayplanRoutes from './routes/dayplan.js';
 const app = express();
 const PORT = Number(process.env.PORT || 5001);
 
+// Trust proxy (required for Cloud Run / load balancers)
+app.set('trust proxy', true);
+
 async function ensureAdminAccount() {
   try {
     const existing = await prisma.user.findUnique({
