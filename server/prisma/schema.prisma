@@ -1,0 +1,396 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  email         String    @unique
+  phone         String?
+  password      String
+  avatar        String?
+  role          String    @default("SALES_EXECUTIVE")
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+  resetToken    String?
+  resetExpires  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  teamId        String?   @db.ObjectId
+  team          Team?     @relation(fields: [teamId], references: [id])
+
+  leads               Lead[]
+  activities          LeadActivity[]
+  journeyProgress     JourneyProgress[]
+  dailyReports        DailyReport[]
+  notifications       Notification[]
+  attendanceRecords   AttendanceRecord[]
+  assets              Asset[]
+  leaderboard         Leaderboard?
+  pendingApproval     Boolean   @default(false)
+  sessions            Session[]
+  auditLogs           AuditLog[]
+  bookmarks           Bookmark[]
+  tasks               Task[]
+  playbookCompletions PlaybookCompletion[]
+}
+
+model Session {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Team {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  color     String    @default("#4f46e5")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  members   User[]
+  leads     Lead[]
+}
+
+model Lead {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  fullName      String
+  phone         String
+  email         String?
+  company       String?
+  leadType      String    @default("INDIVIDUAL")
+  location      String?
+  budget        String?
+  timeline      String?
+  source        String    @default("INSTAGRAM_DM")
+  temperature   String    @default("WARM")
+  status        String    @default("NEW")
+  priority      String    @default("MEDIUM")
+  stage         String    @default("CONNECT")
+  noClose       Boolean   @default(false)
+  adsRunning    Boolean   @default(false)
+  qualified     String?   @default("PENDING")
+  qualifiedBy   String?
+  qualifiedAt   DateTime?
+  lastFollowUp  DateTime?
+  nextFollowUp  DateTime?
+  tags          String    @default("[]")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  assignedToId  String?   @db.ObjectId
+  assignedTo    User?     @relation(fields: [assignedToId], references: [id])
+  createdById   String?   @db.ObjectId
+  teamId        String?   @db.ObjectId
+  team          Team?     @relation(fields: [teamId], references: [id])
+
+  notes           LeadNote[]
+  activities      LeadActivity[]
+  files           LeadFile[]
+  journeyProgress JourneyProgress[]
+}
+
+model LeadNote {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  leadId    String    @db.ObjectId
+  lead      Lead      @relation(fields: [leadId], references: [id])
+}
+
+model LeadActivity {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  type        String
+  title       String
+  description String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+  leadId      String   @db.ObjectId
+  lead        Lead     @relation(fields: [leadId], references: [id])
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model AttendanceRecord {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  checkedInAt  DateTime  @default(now())
+  checkedOutAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  userId       String    @db.ObjectId
+  user         User      @relation(fields: [userId], references: [id])
+}
+
+model LeadFile {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  originalName String
+  url          String
+  type         String    @default("OTHER")
+  size         Int
+  mimeType     String
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+  leadId       String    @db.ObjectId
+  lead         Lead      @relation(fields: [leadId], references: [id])
+}
+
+model JourneyStep {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  key         String    @unique
+  label       String
+  description String?
+  order       Int
+  type        String    @default("text")
+  asset       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  progress    JourneyProgress[]
+}
+
+model JourneyProgress {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  completed     Boolean   @default(false)
+  completedAt   DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  stepId        String    @db.ObjectId
+  step          JourneyStep @relation(fields: [stepId], references: [id])
+  leadId        String    @db.ObjectId
+  lead          Lead      @relation(fields: [leadId], references: [id])
+  completedById String?   @db.ObjectId
+  completedBy   User?     @relation(fields: [completedById], references: [id])
+
+  @@unique([stepId, leadId])
+}
+
+model JourneyMedia {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  url          String
+  originalName String
+  type         String    @default("IMAGE")
+  size         Int
+  mimeType     String
+  stepKey      String
+  approved     Boolean   @default(false)
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  uploadedById String    @db.ObjectId
+}
+
+model DayPlanContent {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  day          Int
+  targetRole   String    @default("ALL")
+  title        String
+  description  String?
+  imageUrl     String?
+  imageName    String?
+  whatsappText String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  uploadedById String?   @db.ObjectId
+
+  @@unique([day, targetRole])
+}
+
+model DayPlanCompletion {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  day       Int
+  userId    String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  @@unique([day, userId])
+}
+
+model JourneyGuideCustom {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  stepKey     String   @unique
+  title       String?
+  summary     String?
+  example     String?
+  script      String?
+  updatedAt   DateTime @updatedAt
+  updatedById String?  @db.ObjectId
+}
+
+model PlaybookModule {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  category  String
+  icon      String?
+  order     Int
+  color     String    @default("#4f46e5")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  scripts   PlaybookScript[]
+}
+
+model PlaybookScript {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  title            String
+  meta             String?
+  explanation      String?
+  psychology       String?
+  copyScript       String?
+  whatsappTemplate String?
+  emailTemplate    String?
+  callScript       String?
+  aiPrompt         String?
+  assignment       String?
+  videoUrl         String?
+  imageUrl         String?
+  framework        String?
+  example          String?
+  checklist        String    @default("[]")
+  mistakes         String    @default("[]")
+  kpis             String    @default("[]")
+  order            Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+  moduleId         String    @db.ObjectId
+  module           PlaybookModule @relation(fields: [moduleId], references: [id])
+  bookmarks        Bookmark[]
+  completions      PlaybookCompletion[]
+}
+
+model Bookmark {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  createdAt DateTime @default(now())
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  scriptId  String   @db.ObjectId
+  script    PlaybookScript @relation(fields: [scriptId], references: [id])
+
+  @@unique([userId, scriptId])
+}
+
+model PlaybookCompletion {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  completed   Boolean  @default(true)
+  completedAt DateTime @default(now())
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+  scriptId    String   @db.ObjectId
+  script      PlaybookScript @relation(fields: [scriptId], references: [id])
+
+  @@unique([userId, scriptId])
+}
+
+model Asset {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  originalName String
+  url          String
+  type         String    @default("OTHER")
+  size         Int
+  mimeType     String
+  folder       String    @default("general")
+  tags         String    @default("[]")
+  coverPhoto   Boolean   @default(false)
+  logoUrl      String?
+  logoPosition String    @default("bottom-right")
+  version      Int       @default(1)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  uploadedById String    @db.ObjectId
+  uploadedBy   User      @relation(fields: [uploadedById], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Leaderboard {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  xp          Int      @default(0)
+  level       Int      @default(1)
+  streak      Int      @default(0)
+  badges      String   @default("[]")
+  lastActive  DateTime @default(now())
+  monthlyXp   Int      @default(0)
+  quarterlyXp Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String   @unique @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model DailyReport {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  date         DateTime @default(now())
+  calls        Int      @default(0)
+  meetings     Int      @default(0)
+  siteVisits   Int      @default(0)
+  demos        Int      @default(0)
+  sales        Int      @default(0)
+  revenue      Float    @default(0)
+  problems     String?
+  achievements String?
+  approved     Boolean  @default(false)
+  approvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       String   @db.ObjectId
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model Task {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  dueDate     DateTime?
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  priority    String    @default("MEDIUM")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      String    @db.ObjectId
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model Setting {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String   @unique
+  value     String
+  type      String   @default("string")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  action    String
+  entity    String
+  entityId  String?
+  metadata  String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+}

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" fill="none">
+  <rect width="360" height="220" rx="24" fill="#ffffff"/>
+  <path d="M60 24h84c24 0 44 20 44 44v44c0 24-20 44-44 44H60V24Z" fill="#112A54"/>
+  <path d="M120 60h44c18 0 32 14 32 32s-14 32-32 32h-44V60Z" fill="#1B4F8B"/>
+  <path d="M57 70l55-42 41 32v92H57V70Z" fill="#2E8F3E"/>
+  <path d="M67 78l35-26 29 22v81H67V78Z" fill="#ffffff" opacity="0.08"/>
+  <path d="M110 106h54v28h-54v-28Z" fill="#1D7A33"/>
+  <path d="M122 116h10v34h-10v-34Z" fill="#45B35F"/>
+  <path d="M140 108h10v42h-10v-42Z" fill="#2E8F3E"/>
+  <path d="M158 100h10v50h-10v-50Z" fill="#1E7B39"/>
+  <path d="M82 156c18-18 28-28 40-34 8-4 18-8 26-8 12 0 24 6 36 18" stroke="#2E8F3E" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M122 68l18-16 30 24" stroke="#2E8F3E" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M200 130l32-24 34 36" stroke="#2E8F3E" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M55 74h17v35H55V74Z" fill="#ffffff"/>
+  <path d="M116 74h17v35h-17V74Z" fill="#ffffff"/>
+  <path d="M52 78h69l-36-28-33 28Z" fill="#2E8F3E"/>
+  <text x="180" y="106" fill="#112A54" font-family="Inter, sans-serif" font-size="48" font-weight="800">Pre</text>
+  <text x="252" y="106" fill="#2E8F3E" font-family="Inter, sans-serif" font-size="48" font-weight="800">Sold</text>
+  <text x="180" y="150" fill="#112A54" font-family="Inter, sans-serif" font-size="30" font-weight="700">CRM</text>
+  <line x1="160" y1="162" x2="310" y2="162" stroke="#2E8F3E" stroke-width="4"/>
+  <text x="180" y="190" fill="#112A54" font-family="Inter, sans-serif" font-size="16" font-weight="600">LEADS TODAY. PRE-SOLD TOMORROW.</text>
+</svg>

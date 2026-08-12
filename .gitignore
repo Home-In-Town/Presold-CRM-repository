@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment files — NEVER commit secrets
+.env
+.env.local
+.env.production
+server/.env
+client/.env
+client/.env.production
+
+# Build output
+client/dist/
+client/.vite/
+
+# Prisma
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/prisma/*.db
+
+# Uploads (local files)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
