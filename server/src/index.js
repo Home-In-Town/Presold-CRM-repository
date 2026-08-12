@@ -95,7 +95,15 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/dayplan', dayplanRoutes);
 
 // Health
-app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+app.get('/api/health', async (req, res) => {
+  try {
+    // Test DB connection
+    await prisma.$runCommandRaw({ ping: 1 });
+    res.json({ status: 'ok', db: 'connected', time: new Date().toISOString() });
+  } catch (err) {
+    res.json({ status: 'ok', db: 'disconnected', dbError: err.message, time: new Date().toISOString() });
+  }
+});
 
 // Error handler
 app.use((err, req, res, next) => {
