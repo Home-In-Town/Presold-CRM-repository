@@ -114,6 +114,59 @@ router.post('/toggle', authenticate, async (req, res) => {
   }
 });
 
+// POST /journey/steps/add — admin adds a new journey step at the end
+router.post('/steps/add', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const { label, key, description } = req.body;
+
+    if (!label) return res.status(400).json({ error: 'Label is required' });
+
+    // Determine next order
+    const lastStep = await prisma.journeyStep.findFirst({ orderBy: { order: 'desc' } });
+    const nextOrder = (lastStep?.order || 0) + 1;
+
+    // Generate key from label if not provided
+    const stepKey = key || label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+    const newStep = await prisma.journeyStep.create({
+      data: {
+        key: stepKey,
+        label,
+        description: description || '',
+        order: nextOrder,
+        type: 'text'
+      }
+    });
+
+    const steps = await prisma.journeyStep.findMany({ orderBy: { order: 'asc' } });
+    res.status(201).json({ step: newStep, steps });
+  } catch (err) {
+    console.error('Add journey step error:', err);
+    if (err.code === 'P2002') return res.status(400).json({ error: 'A step with this key already exists' });
+    res.status(500).json({ error: 'Failed to add step' });
+  }
+});
+
+// DELETE /journey/steps/remove — admin removes the last journey step
+router.delete('/steps/remove', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const lastStep = await prisma.journeyStep.findFirst({ orderBy: { order: 'desc' } });
+    if (!lastStep) return res.status(400).json({ error: 'No steps to remove' });
+
+    // Delete any progress records tied to this step
+    await prisma.journeyProgress.deleteMany({ where: { stepId: lastStep.id } });
+
+    // Delete the step itself
+    await prisma.journeyStep.delete({ where: { id: lastStep.id } });
+
+    const steps = await prisma.journeyStep.findMany({ orderBy: { order: 'asc' } });
+    res.json({ removedStep: lastStep, steps });
+  } catch (err) {
+    console.error('Remove journey step error:', err);
+    res.status(500).json({ error: 'Failed to remove step' });
+  }
+});
+
 // ─── Journey Step Media (upload, approve, list) ─────────────────────────────
 
 // GET /journey/guides — get all custom guide overrides

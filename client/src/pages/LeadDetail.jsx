@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Phone, Mail, Building2, MapPin, Calendar, Upload,
   Check, MessageCircle, FileText, Image, Video, Clock, Send, Trash2,
-  ChevronDown, ChevronRight, Globe, Languages, BookOpen, Camera, Edit3
+  ChevronDown, ChevronRight, Globe, Languages, BookOpen, Camera, Edit3,
+  Plus, Minus
 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -256,6 +257,33 @@ export default function LeadDetail() {
     setExpandedStepId(prev => prev === stepId ? null : stepId);
   };
 
+  const adminAdjustJourney = async (action) => {
+    if (action === 'add') {
+      const label = prompt('Enter the name for the new journey step:');
+      if (!label || !label.trim()) return;
+      try {
+        const res = await api.post('/journey/steps/add', { label: label.trim() });
+        // Reload journey to get fresh steps + progress
+        await loadJourney();
+        toast.success(`Step "${label.trim()}" added ✅`);
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to add step');
+      }
+    } else if (action === 'remove') {
+      const lastStep = journeySteps[journeySteps.length - 1];
+      if (!lastStep) return toast.error('No steps to remove');
+      const confirmed = confirm(`Remove the last step "${lastStep.label}"?`);
+      if (!confirmed) return;
+      try {
+        await api.delete('/journey/steps/remove');
+        await loadJourney();
+        toast.success(`Step "${lastStep.label}" removed ↩️`);
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to remove step');
+      }
+    }
+  };
+
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -335,6 +363,26 @@ export default function LeadDetail() {
                 >
                   <Languages size={11} /> {language === 'en' ? 'हिंदी' : 'English'}
                 </button>
+                {isAdmin && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => adminAdjustJourney('remove')}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-colors"
+                      title="Remove last journey step (Admin)"
+                    >
+                      <Minus size={12} strokeWidth={3} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adminAdjustJourney('add')}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-colors"
+                      title="Add new journey step (Admin)"
+                    >
+                      <Plus size={12} strokeWidth={3} />
+                    </button>
+                  </div>
+                )}
                 <span className="text-xs text-brand-400 font-medium">{completedCount}/{journeySteps.length} • {progress}%</span>
               </div>
             </div>
