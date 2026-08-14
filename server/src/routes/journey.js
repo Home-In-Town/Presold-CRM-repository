@@ -147,20 +147,33 @@ router.post('/steps/add', authenticate, authorize('ADMIN'), async (req, res) => 
   }
 });
 
-// DELETE /journey/steps/remove — admin removes the last journey step
-router.delete('/steps/remove', authenticate, authorize('ADMIN'), async (req, res) => {
+// DELETE /journey/steps/:stepId — admin removes a specific journey step by ID
+router.delete('/steps/:stepId', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
-    const lastStep = await prisma.journeyStep.findFirst({ orderBy: { order: 'desc' } });
-    if (!lastStep) return res.status(400).json({ error: 'No steps to remove' });
+    const { stepId } = req.params;
+
+    const step = await prisma.journeyStep.findUnique({ where: { id: stepId } });
+    if (!step) return res.status(404).json({ error: 'Step not found' });
 
     // Delete any progress records tied to this step
-    await prisma.journeyProgress.deleteMany({ where: { stepId: lastStep.id } });
+    await prisma.journeyProgress.deleteMany({ where: { stepId } });
 
     // Delete the step itself
-    await prisma.journeyStep.delete({ where: { id: lastStep.id } });
+    await prisma.journeyStep.delete({ where: { id: stepId } });
+
+    // Re-order remaining steps
+    const remainingSteps = await prisma.journeyStep.findMany({ orderBy: { order: 'asc' } });
+    for (let i = 0; i < remainingSteps.length; i++) {
+      if (remainingSteps[i].order !== i + 1) {
+        await prisma.journeyStep.update({
+          where: { id: remainingSteps[i].id },
+          data: { order: i + 1 }
+        });
+      }
+    }
 
     const steps = await prisma.journeyStep.findMany({ orderBy: { order: 'asc' } });
-    res.json({ removedStep: lastStep, steps });
+    res.json({ removedStep: step, steps });
   } catch (err) {
     console.error('Remove journey step error:', err);
     res.status(500).json({ error: 'Failed to remove step' });

@@ -262,25 +262,24 @@ export default function LeadDetail() {
       const label = prompt('Enter the name for the new journey step:');
       if (!label || !label.trim()) return;
       try {
-        const res = await api.post('/journey/steps/add', { label: label.trim() });
-        // Reload journey to get fresh steps + progress
+        await api.post('/journey/steps/add', { label: label.trim() });
         await loadJourney();
         toast.success(`Step "${label.trim()}" added ✅`);
       } catch (err) {
         toast.error(err.response?.data?.error || 'Failed to add step');
       }
-    } else if (action === 'remove') {
-      const lastStep = journeySteps[journeySteps.length - 1];
-      if (!lastStep) return toast.error('No steps to remove');
-      const confirmed = confirm(`Remove the last step "${lastStep.label}"?`);
-      if (!confirmed) return;
-      try {
-        await api.delete('/journey/steps/remove');
-        await loadJourney();
-        toast.success(`Step "${lastStep.label}" removed ↩️`);
-      } catch (err) {
-        toast.error(err.response?.data?.error || 'Failed to remove step');
-      }
+    }
+  };
+
+  const adminRemoveStep = async (step) => {
+    const confirmed = confirm(`Remove step "${step.label}"? This will delete all progress for this step across all leads.`);
+    if (!confirmed) return;
+    try {
+      await api.delete(`/journey/steps/${step.id}`);
+      await loadJourney();
+      toast.success(`Step "${step.label}" removed`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to remove step');
     }
   };
 
@@ -367,14 +366,6 @@ export default function LeadDetail() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => adminAdjustJourney('remove')}
-                      className="w-6 h-6 flex items-center justify-center rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-colors"
-                      title="Remove last journey step (Admin)"
-                    >
-                      <Minus size={12} strokeWidth={3} />
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => adminAdjustJourney('add')}
                       className="w-6 h-6 flex items-center justify-center rounded-lg bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-colors"
                       title="Add new journey step (Admin)"
@@ -422,6 +413,16 @@ export default function LeadDetail() {
                         <span className="flex items-center justify-center w-5 h-5 rounded-md bg-dark-800/70 text-gray-400">
                           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                         </span>
+                      )}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); adminRemoveStep(step); }}
+                          className="w-5 h-5 flex items-center justify-center rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/25 transition-colors"
+                          title={`Remove "${step.label}"`}
+                        >
+                          <Minus size={10} strokeWidth={3} />
+                        </button>
                       )}
                       {isLocked && <span className="text-[9px] uppercase tracking-wide text-gray-500">Locked</span>}
                     </div>
