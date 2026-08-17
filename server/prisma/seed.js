@@ -27,30 +27,30 @@ async function main() {
 
   // ── Journey steps ──────────────────────────────────────────────────────────
   const steps = [
-    { key: 'sourced',           label: 'Lead Sourced',             order: 1,  type: 'text'     },
-    { key: 'qualified',         label: 'Lead Qualified',            order: 2,  type: 'text'     },
-    { key: 'first_dm',          label: 'First DM Sent',             order: 3,  type: 'text'     },
-    { key: 'reply_received',    label: 'Reply Received',            order: 4,  type: 'text'     },
-    { key: 'need_identified',   label: 'Need Identified',           order: 5,  type: 'text'     },
-    { key: 'authority_sent',    label: 'Authority Content Sent',    order: 6,  type: 'image'    },
-    { key: 'trust_content',     label: 'Trust Content Sent',        order: 7,  type: 'video'    },
-    { key: 'pain_agitated',     label: 'Pain Point Agitated',       order: 8,  type: 'text'     },
-    { key: 'solution_hinted',   label: 'Solution Hinted',           order: 9,  type: 'text'     },
-    { key: 'trial_offered',     label: 'Trial/Value Offered',       order: 10, type: 'document' },
-    { key: 'trial_consumed',    label: 'Trial Consumed',            order: 11, type: 'text'     },
-    { key: 'demo_pitched',      label: 'Demo Pitched',              order: 12, type: 'text'     },
-    { key: 'demo_booked',       label: 'Demo Booked',               order: 13, type: 'text'     },
-    { key: 'demo_reminder',     label: 'Demo Reminder Sent',        order: 14, type: 'text'     },
-    { key: 'demo_done',         label: 'Demo Completed',            order: 15, type: 'video'    },
-    { key: 'objections_handled',label: 'Objections Handled',        order: 16, type: 'text'     },
-    { key: 'proposal_sent',     label: 'Proposal Sent',             order: 17, type: 'document' },
-    { key: 'followup_sequence', label: 'Follow-up Sequence',        order: 18, type: 'text'     },
-    { key: 'closed_won',        label: 'Closed Won',                order: 19, type: 'text'     },
-    { key: 'referral_asked',    label: 'Referral Asked',            order: 20, type: 'text'     }
+    { key: 'sourced',           label: 'Lead Sourced',             order: 1,  type: 'text',     category: 'COMMON' },
+    { key: 'qualified',         label: 'Lead Qualified',            order: 2,  type: 'text',     category: 'COMMON' },
+    { key: 'first_dm',          label: 'First DM Sent',             order: 3,  type: 'text',     category: 'COMMON' },
+    { key: 'reply_received',    label: 'Reply Received',            order: 4,  type: 'text',     category: 'COMMON' },
+    { key: 'need_identified',   label: 'Need Identified',           order: 5,  type: 'text',     category: 'COMMON' },
+    { key: 'authority_sent',    label: 'Authority Content Sent',    order: 6,  type: 'image',    category: 'COMMON' },
+    { key: 'trust_content',     label: 'Trust Content Sent',        order: 7,  type: 'video',    category: 'COMMON' },
+    { key: 'pain_agitated',     label: 'Pain Point Agitated',       order: 8,  type: 'text',     category: 'COMMON' },
+    { key: 'solution_hinted',   label: 'Solution Hinted',           order: 9,  type: 'text',     category: 'COMMON' },
+    { key: 'trial_offered',     label: 'Trial/Value Offered',       order: 10, type: 'document', category: 'COMMON' },
+    { key: 'trial_consumed',    label: 'Trial Consumed',            order: 11, type: 'text',     category: 'COMMON' },
+    { key: 'demo_pitched',      label: 'Demo Pitched',              order: 12, type: 'text',     category: 'COMMON' },
+    { key: 'demo_booked',       label: 'Demo Booked',               order: 13, type: 'text',     category: 'COMMON' },
+    { key: 'demo_reminder',     label: 'Demo Reminder Sent',        order: 14, type: 'text',     category: 'COMMON' },
+    { key: 'demo_done',         label: 'Demo Completed',            order: 15, type: 'video',    category: 'COMMON' },
+    { key: 'objections_handled',label: 'Objections Handled',        order: 16, type: 'text',     category: 'COMMON' },
+    { key: 'proposal_sent',     label: 'Proposal Sent',             order: 17, type: 'document', category: 'COMMON' },
+    { key: 'followup_sequence', label: 'Follow-up Sequence',        order: 18, type: 'text',     category: 'COMMON' },
+    { key: 'closed_won',        label: 'Closed Won',                order: 19, type: 'text',     category: 'COMMON' },
+    { key: 'referral_asked',    label: 'Referral Asked',            order: 20, type: 'text',     category: 'COMMON' }
   ];
 
   for (const step of steps) {
-    await prisma.journeyStep.upsert({ where: { key: step.key }, update: {}, create: step });
+    await prisma.journeyStep.upsert({ where: { key: step.key }, update: { category: 'COMMON' }, create: step });
   }
 
   // ── Playbook modules ───────────────────────────────────────────────────────

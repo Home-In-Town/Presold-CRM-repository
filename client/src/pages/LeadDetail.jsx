@@ -143,6 +143,7 @@ export default function LeadDetail() {
   const [note, setNote] = useState('');
   const [journeySteps, setJourneySteps] = useState([]);
   const [adsJourneySteps, setAdsJourneySteps] = useState([]);
+  const [journeyTab, setJourneyTab] = useState('COMMON');
   const [expandedStepId, setExpandedStepId] = useState(null);
   const [language, setLanguage] = useState('en');
   const [customGuides, setCustomGuides] = useState({});
@@ -355,57 +356,79 @@ export default function LeadDetail() {
             </div>
           </div>
 
-          {/* Common Lead Journey */}
-          <JourneyBlock
-            title="Lead Journey"
-            steps={journeySteps}
-            completedCount={completedCount}
-            progress={progress}
-            category="COMMON"
-            language={language}
-            setLanguage={setLanguage}
-            isAdmin={isAdmin}
-            expandedStepId={expandedStepId}
-            toggleExpand={toggleExpand}
-            toggleStep={toggleStep}
-            adminAdjustJourney={adminAdjustJourney}
-            adminRemoveStep={adminRemoveStep}
-            getEffectiveGuide={getEffectiveGuide}
-            getEffectiveScript={getEffectiveScript}
-            editingStep={editingStep}
-            setEditingStep={setEditingStep}
-            editForm={editForm}
-            setEditForm={setEditForm}
-            saveGuide={saveGuide}
-            lead={lead}
-            navigate={navigate}
-          />
+          {/* Journey Steps — Tabbed */}
+          <div className="glass-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setJourneyTab('COMMON')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${journeyTab === 'COMMON' ? 'bg-brand-600 text-white shadow-glow' : 'bg-dark-600 text-gray-400 hover:bg-dark-500 hover:text-white'}`}
+              >
+                Lead Journey
+              </button>
+              <button
+                type="button"
+                onClick={() => setJourneyTab('ADS')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${journeyTab === 'ADS' ? 'bg-amber-600 text-white shadow-glow' : 'bg-dark-600 text-gray-400 hover:bg-dark-500 hover:text-white'}`}
+              >
+                Ads Lead Journey
+              </button>
+            </div>
 
-          {/* Ads Lead Journey */}
-          <JourneyBlock
-            title="Ads Lead Journey"
-            steps={adsJourneySteps}
-            completedCount={adsCompletedCount}
-            progress={adsProgress}
-            category="ADS"
-            language={language}
-            setLanguage={setLanguage}
-            isAdmin={isAdmin}
-            expandedStepId={expandedStepId}
-            toggleExpand={toggleExpand}
-            toggleStep={toggleStep}
-            adminAdjustJourney={adminAdjustJourney}
-            adminRemoveStep={adminRemoveStep}
-            getEffectiveGuide={getEffectiveGuide}
-            getEffectiveScript={getEffectiveScript}
-            editingStep={editingStep}
-            setEditingStep={setEditingStep}
-            editForm={editForm}
-            setEditForm={setEditForm}
-            saveGuide={saveGuide}
-            lead={lead}
-            navigate={navigate}
-          />
+            {journeyTab === 'COMMON' && (
+              <JourneyBlock
+                title="Lead Journey"
+                steps={journeySteps}
+                completedCount={completedCount}
+                progress={progress}
+                category="COMMON"
+                language={language}
+                setLanguage={setLanguage}
+                isAdmin={isAdmin}
+                expandedStepId={expandedStepId}
+                toggleExpand={toggleExpand}
+                toggleStep={toggleStep}
+                adminAdjustJourney={adminAdjustJourney}
+                adminRemoveStep={adminRemoveStep}
+                getEffectiveGuide={getEffectiveGuide}
+                getEffectiveScript={getEffectiveScript}
+                editingStep={editingStep}
+                setEditingStep={setEditingStep}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                saveGuide={saveGuide}
+                lead={lead}
+                navigate={navigate}
+              />
+            )}
+
+            {journeyTab === 'ADS' && (
+              <JourneyBlock
+                title="Ads Lead Journey"
+                steps={adsJourneySteps}
+                completedCount={adsCompletedCount}
+                progress={adsProgress}
+                category="ADS"
+                language={language}
+                setLanguage={setLanguage}
+                isAdmin={isAdmin}
+                expandedStepId={expandedStepId}
+                toggleExpand={toggleExpand}
+                toggleStep={toggleStep}
+                adminAdjustJourney={adminAdjustJourney}
+                adminRemoveStep={adminRemoveStep}
+                getEffectiveGuide={getEffectiveGuide}
+                getEffectiveScript={getEffectiveScript}
+                editingStep={editingStep}
+                setEditingStep={setEditingStep}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                saveGuide={saveGuide}
+                lead={lead}
+                navigate={navigate}
+              />
+            )}
+          </div>
 
           {/* Notes */}
           <div className="glass-card p-5">
@@ -540,7 +563,7 @@ function JourneyBlock({ title, steps, completedCount, progress, category, langua
   const borderAccent = category === 'ADS' ? 'border-amber-500/30' : 'border-brand-500/30';
 
   return (
-    <div className="glass-card p-5">
+    <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white">{title}</h3>
         <div className="flex items-center gap-2">
