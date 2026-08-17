@@ -16,7 +16,9 @@ async function verifyLeadAccess(user, leadId) {
 // GET all journey steps (template — not user-specific)
 router.get('/steps', authenticate, async (req, res) => {
   try {
-    const steps = await prisma.journeyStep.findMany({ orderBy: { order: 'asc' } });
+    const { category } = req.query;
+    const where = category ? { category } : {};
+    const steps = await prisma.journeyStep.findMany({ where, orderBy: { order: 'asc' } });
     res.json(steps);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch steps' });
@@ -60,7 +62,7 @@ router.post('/toggle', authenticate, async (req, res) => {
 
     if (!existing && step.order > 1) {
       const previousStep = await prisma.journeyStep.findFirst({
-        where: { order: step.order - 1 }
+        where: { order: step.order - 1, category: step.category }
       });
 
       if (previousStep) {
@@ -117,12 +119,17 @@ router.post('/toggle', authenticate, async (req, res) => {
 // POST /journey/steps/add — admin adds a new journey step at the end
 router.post('/steps/add', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
-    const { label, key, description } = req.body;
+    const { label, key, description, category } = req.body;
 
     if (!label) return res.status(400).json({ error: 'Label is required' });
 
-    // Determine next order
-    const lastStep = await prisma.journeyStep.findFirst({ orderBy: { order: 'desc' } });
+    const stepCategory = category === 'ADS' ? 'ADS' : 'COMMON';
+
+    // Determine next order within the same category
+    const lastStep = await prisma.journeyStep.findFirst({
+      where: { category: stepCategory },
+      orderBy: { order: 'desc' }
+    });
     const nextOrder = (lastStep?.order || 0) + 1;
 
     // Generate key from label if not provided
@@ -134,11 +141,15 @@ router.post('/steps/add', authenticate, authorize('ADMIN'), async (req, res) => 
         label,
         description: description || '',
         order: nextOrder,
+        category: stepCategory,
         type: 'text'
       }
     });
 
-    const steps = await prisma.journeyStep.findMany({ orderBy: { order: 'asc' } });
+    const steps = await prisma.journeyStep.findMany({
+      where: { category: stepCategory },
+      orderBy: { order: 'asc' }
+    });
     res.status(201).json({ step: newStep, steps });
   } catch (err) {
     console.error('Add journey step error:', err);
@@ -155,14 +166,19 @@ router.delete('/steps/:stepId', authenticate, authorize('ADMIN'), async (req, re
     const step = await prisma.journeyStep.findUnique({ where: { id: stepId } });
     if (!step) return res.status(404).json({ error: 'Step not found' });
 
+    const stepCategory = step.category;
+
     // Delete any progress records tied to this step
     await prisma.journeyProgress.deleteMany({ where: { stepId } });
 
     // Delete the step itself
     await prisma.journeyStep.delete({ where: { id: stepId } });
 
-    // Re-order remaining steps
-    const remainingSteps = await prisma.journeyStep.findMany({ orderBy: { order: 'asc' } });
+    // Re-order remaining steps within the same category
+    const remainingSteps = await prisma.journeyStep.findMany({
+      where: { category: stepCategory },
+      orderBy: { order: 'asc' }
+    });
     for (let i = 0; i < remainingSteps.length; i++) {
       if (remainingSteps[i].order !== i + 1) {
         await prisma.journeyStep.update({
@@ -172,7 +188,10 @@ router.delete('/steps/:stepId', authenticate, authorize('ADMIN'), async (req, re
       }
     }
 
-    const steps = await prisma.journeyStep.findMany({ orderBy: { order: 'asc' } });
+    const steps = await prisma.journeyStep.findMany({
+      where: { category: stepCategory },
+      orderBy: { order: 'asc' }
+    });
     res.json({ removedStep: step, steps });
   } catch (err) {
     console.error('Remove journey step error:', err);

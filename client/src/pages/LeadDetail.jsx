@@ -142,6 +142,7 @@ export default function LeadDetail() {
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState('');
   const [journeySteps, setJourneySteps] = useState([]);
+  const [adsJourneySteps, setAdsJourneySteps] = useState([]);
   const [expandedStepId, setExpandedStepId] = useState(null);
   const [language, setLanguage] = useState('en');
   const [customGuides, setCustomGuides] = useState({});
@@ -202,15 +203,17 @@ export default function LeadDetail() {
 
   const loadJourney = async () => {
     try {
-      const [stepsRes, progressRes] = await Promise.all([
-        api.get('/journey/steps'),
+      const [commonStepsRes, adsStepsRes, progressRes] = await Promise.all([
+        api.get('/journey/steps?category=COMMON'),
+        api.get('/journey/steps?category=ADS'),
         api.get(`/journey/progress/${id}`)
       ]);
-      const steps = stepsRes.data.map(step => {
+      const mapProgress = (steps) => steps.map(step => {
         const prog = progressRes.data.find(p => p.stepId === step.id);
         return { ...step, completed: prog?.completed || false, progressId: prog?.id };
       });
-      setJourneySteps(steps);
+      setJourneySteps(mapProgress(commonStepsRes.data));
+      setAdsJourneySteps(mapProgress(adsStepsRes.data));
     } catch {}
   };
 
@@ -257,12 +260,12 @@ export default function LeadDetail() {
     setExpandedStepId(prev => prev === stepId ? null : stepId);
   };
 
-  const adminAdjustJourney = async (action) => {
+  const adminAdjustJourney = async (action, category = 'COMMON') => {
     if (action === 'add') {
-      const label = prompt('Enter the name for the new journey step:');
+      const label = prompt(`Enter the name for the new ${category === 'ADS' ? 'Ads' : 'Common'} journey step:`);
       if (!label || !label.trim()) return;
       try {
-        await api.post('/journey/steps/add', { label: label.trim() });
+        await api.post('/journey/steps/add', { label: label.trim(), category });
         await loadJourney();
         toast.success(`Step "${label.trim()}" added ✅`);
       } catch (err) {
@@ -301,6 +304,8 @@ export default function LeadDetail() {
 
   const completedCount = journeySteps.filter(s => s.completed).length;
   const progress = Math.round((completedCount / Math.max(journeySteps.length, 1)) * 100);
+  const adsCompletedCount = adsJourneySteps.filter(s => s.completed).length;
+  const adsProgress = Math.round((adsCompletedCount / Math.max(adsJourneySteps.length, 1)) * 100);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -350,176 +355,57 @@ export default function LeadDetail() {
             </div>
           </div>
 
-          {/* Journey Steps */}
-          <div className="glass-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-white">Lead Journey</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
-                  className="flex items-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-600/10 px-2 py-1 text-[10px] font-medium text-brand-300 hover:bg-brand-600/20"
-                >
-                  <Languages size={11} /> {language === 'en' ? 'हिंदी' : 'English'}
-                </button>
-                {isAdmin && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => adminAdjustJourney('add')}
-                      className="w-6 h-6 flex items-center justify-center rounded-lg bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-colors"
-                      title="Add new journey step (Admin)"
-                    >
-                      <Plus size={12} strokeWidth={3} />
-                    </button>
-                  </div>
-                )}
-                <span className="text-xs text-brand-400 font-medium">{completedCount}/{journeySteps.length} • {progress}%</span>
-              </div>
-            </div>
-            <div className="h-2 bg-dark-600 rounded-full overflow-hidden mb-4">
-              <div className="h-full bg-gradient-to-r from-brand-500 to-green-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
-            </div>
-            <div className="space-y-2.5 max-h-[26rem] overflow-y-auto pr-1">
-              {journeySteps.map((step, i) => {
-                const previousStep = journeySteps.find(s => s.order === step.order - 1);
-                const isLocked = step.order > 1 && !previousStep?.completed;
-                const isExpanded = expandedStepId === step.id;
-                const guide = getEffectiveGuide(step);
-                const currentGuide = language === 'hi' ? guide.hi : guide.en;
-                const effectiveScript = getEffectiveScript(step);
-                const stepKey = step.key || step.label?.toLowerCase().replace(/[^a-z]+/g, '_');
+          {/* Common Lead Journey */}
+          <JourneyBlock
+            title="Lead Journey"
+            steps={journeySteps}
+            completedCount={completedCount}
+            progress={progress}
+            category="COMMON"
+            language={language}
+            setLanguage={setLanguage}
+            isAdmin={isAdmin}
+            expandedStepId={expandedStepId}
+            toggleExpand={toggleExpand}
+            toggleStep={toggleStep}
+            adminAdjustJourney={adminAdjustJourney}
+            adminRemoveStep={adminRemoveStep}
+            getEffectiveGuide={getEffectiveGuide}
+            getEffectiveScript={getEffectiveScript}
+            editingStep={editingStep}
+            setEditingStep={setEditingStep}
+            editForm={editForm}
+            setEditForm={setEditForm}
+            saveGuide={saveGuide}
+            lead={lead}
+            navigate={navigate}
+          />
 
-                return (
-                  <div key={step.id} className={`rounded-xl border transition-all ${step.completed ? 'border-green-500/10 bg-green-500/5' : isLocked ? 'border-white/5 bg-dark-700/40 opacity-75' : 'border-white/5 bg-dark-600/30 hover:border-brand-500/20'}`}>
-                    <div
-                      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer"
-                      onClick={() => !isLocked && toggleExpand(step.id)}
-                      title={isLocked ? `Complete "${previousStep?.label || 'previous step'}" first` : ''}
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); if (!isLocked) toggleStep(step.id); }}
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${step.completed ? 'bg-green-500 border-green-500' : isLocked ? 'border-gray-700 bg-dark-800 cursor-not-allowed' : 'border-brand-400 bg-dark-700 hover:border-brand-300'}`}
-                        aria-label={step.completed ? 'Mark step incomplete' : 'Mark step complete'}
-                      >
-                        {step.completed ? <Check size={10} className="text-white" strokeWidth={3} /> : isLocked ? <span className="text-[8px] text-gray-500">🔒</span> : null}
-                      </button>
-                      <span className="text-[10px] font-bold text-gray-600 w-5">{i + 1}</span>
-                      <span className={`text-xs flex-1 ${step.completed ? 'text-green-400 line-through opacity-70' : isLocked ? 'text-gray-500' : 'text-gray-300'}`}>
-                        {language === 'hi' ? (step.label ? step.label : (currentGuide.hi?.title || step.label)) : step.label}
-                      </span>
-                      {!isLocked && (
-                        <span className="flex items-center justify-center w-5 h-5 rounded-md bg-dark-800/70 text-gray-400">
-                          {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                        </span>
-                      )}
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); adminRemoveStep(step); }}
-                          className="w-5 h-5 flex items-center justify-center rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/25 transition-colors"
-                          title={`Remove "${step.label}"`}
-                        >
-                          <Minus size={10} strokeWidth={3} />
-                        </button>
-                      )}
-                      {isLocked && <span className="text-[9px] uppercase tracking-wide text-gray-500">Locked</span>}
-                    </div>
-
-                    {isExpanded && !isLocked && (
-                      <div className="border-t border-white/5 px-3 py-3 bg-dark-900/30">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-300">{language === 'hi' ? 'गाइड' : 'Guide'}</p>
-                          <button
-                            type="button"
-                            onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
-                            className="flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] text-gray-300"
-                          >
-                            <Globe size={10} /> {language === 'en' ? 'हिंदी' : 'EN'}
-                          </button>
-                        </div>
-                        <p className="text-sm font-medium text-white mb-1">{currentGuide.title}</p>
-                        <p className="text-[11px] leading-relaxed text-gray-300">{currentGuide.summary}</p>
-                        <div className="mt-2 rounded-lg border border-brand-500/20 bg-brand-600/5 p-2.5">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-300 mb-1">{language === 'hi' ? 'उदाहरण' : 'Example'}</p>
-                          <p className="text-[11px] leading-relaxed text-gray-200">{currentGuide.example}</p>
-                        </div>
-
-                        {/* Admin Edit Button */}
-                        {isAdmin && editingStep !== stepKey && (
-                          <button
-                            onClick={() => { setEditingStep(stepKey); setEditForm({ title: currentGuide.title || '', summary: currentGuide.summary || '', example: currentGuide.example || '', script: effectiveScript || '' }); }}
-                            className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/30 transition-colors"
-                          >
-                            <Edit3 size={12} /> Edit Guide & Script (applies to all teams)
-                          </button>
-                        )}
-
-                        {/* Admin Edit Form */}
-                        {isAdmin && editingStep === stepKey && (
-                          <div className="mt-3 p-3 rounded-xl bg-dark-900 border border-amber-500/20 space-y-2">
-                            <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Edit Guide (visible to all users)</p>
-                            <input type="text" placeholder="Title" value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} className="input-field text-xs" />
-                            <textarea placeholder="Summary / Description" value={editForm.summary} onChange={e => setEditForm({ ...editForm, summary: e.target.value })} className="input-field text-xs" rows={2} />
-                            <textarea placeholder="Example" value={editForm.example} onChange={e => setEditForm({ ...editForm, example: e.target.value })} className="input-field text-xs" rows={2} />
-                            <textarea placeholder="Script template" value={editForm.script} onChange={e => setEditForm({ ...editForm, script: e.target.value })} className="input-field text-xs" rows={4} />
-                            <div className="flex gap-2">
-                              <button onClick={() => saveGuide(stepKey)} className="btn-primary text-xs px-3 py-1.5">Save for All Users</button>
-                              <button onClick={() => setEditingStep(null)} className="text-xs text-gray-500 hover:text-white">Cancel</button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Sample Script */}
-                        <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-600/5 p-2.5">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-400 flex items-center gap-1">
-                              <MessageCircle size={10} /> Sample Script
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(effectiveScript.replace(/\\n/g, '\n'));
-                                toast.success('Script copied to clipboard!');
-                              }}
-                              className="text-[9px] font-medium px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors"
-                            >
-                              Copy
-                            </button>
-                          </div>
-                          <p className="text-[11px] leading-relaxed text-gray-200 whitespace-pre-line">{effectiveScript}</p>
-                        </div>
-
-                        {/* Media Upload & Display */}
-                        <JourneyStepMedia stepKey={step.key} />
-
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/playbook?chapter=${step.order}`)}
-                          className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 text-xs font-medium hover:bg-brand-500/20 transition-colors"
-                        >
-                          <BookOpen size={13} />
-                          {language === 'hi' ? `प्लेबुक चैप्टर ${step.order} पढ़ें` : `Read Playbook Chapter ${step.order}`}
-                        </button>
-                        {lead.phone && (
-                          <a
-                            href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '').replace(/^0+/, '91')}?text=${encodeURIComponent(effectiveScript.replace(/\\n/g, '\n').replace(/\[Name\]/g, lead.fullName || ''))}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-medium hover:bg-green-500/20 transition-colors"
-                          >
-                            <MessageCircle size={13} />
-                            {language === 'hi' ? 'WhatsApp पर भेजें' : 'Send via WhatsApp'}
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Ads Lead Journey */}
+          <JourneyBlock
+            title="Ads Lead Journey"
+            steps={adsJourneySteps}
+            completedCount={adsCompletedCount}
+            progress={adsProgress}
+            category="ADS"
+            language={language}
+            setLanguage={setLanguage}
+            isAdmin={isAdmin}
+            expandedStepId={expandedStepId}
+            toggleExpand={toggleExpand}
+            toggleStep={toggleStep}
+            adminAdjustJourney={adminAdjustJourney}
+            adminRemoveStep={adminRemoveStep}
+            getEffectiveGuide={getEffectiveGuide}
+            getEffectiveScript={getEffectiveScript}
+            editingStep={editingStep}
+            setEditingStep={setEditingStep}
+            editForm={editForm}
+            setEditForm={setEditForm}
+            saveGuide={saveGuide}
+            lead={lead}
+            navigate={navigate}
+          />
 
           {/* Notes */}
           <div className="glass-card p-5">
@@ -641,6 +527,189 @@ export default function LeadDetail() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Journey Block Component ─────────────────────────────────────────────────
+function JourneyBlock({ title, steps, completedCount, progress, category, language, setLanguage, isAdmin, expandedStepId, toggleExpand, toggleStep, adminAdjustJourney, adminRemoveStep, getEffectiveGuide, getEffectiveScript, editingStep, setEditingStep, editForm, setEditForm, saveGuide, lead, navigate }) {
+  const gradientClass = category === 'ADS'
+    ? 'from-amber-500 to-orange-500'
+    : 'from-brand-500 to-green-500';
+  const borderAccent = category === 'ADS' ? 'border-amber-500/30' : 'border-brand-500/30';
+
+  return (
+    <div className="glass-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
+            className="flex items-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-600/10 px-2 py-1 text-[10px] font-medium text-brand-300 hover:bg-brand-600/20"
+          >
+            <Languages size={11} /> {language === 'en' ? 'हिंदी' : 'English'}
+          </button>
+          {isAdmin && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => adminAdjustJourney('add', category)}
+                className="w-6 h-6 flex items-center justify-center rounded-lg bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-colors"
+                title={`Add new ${category === 'ADS' ? 'Ads' : 'Common'} journey step (Admin)`}
+              >
+                <Plus size={12} strokeWidth={3} />
+              </button>
+            </div>
+          )}
+          <span className="text-xs text-brand-400 font-medium">{completedCount}/{steps.length} • {progress}%</span>
+        </div>
+      </div>
+      <div className="h-2 bg-dark-600 rounded-full overflow-hidden mb-4">
+        <div className={`h-full bg-gradient-to-r ${gradientClass} rounded-full transition-all duration-500`} style={{ width: `${progress}%` }} />
+      </div>
+      {steps.length === 0 && (
+        <p className="text-xs text-gray-500 text-center py-4">No steps yet. {isAdmin ? 'Click + to add one.' : ''}</p>
+      )}
+      <div className="space-y-2.5 max-h-[26rem] overflow-y-auto pr-1">
+        {steps.map((step, i) => {
+          const previousStep = steps.find(s => s.order === step.order - 1);
+          const isLocked = step.order > 1 && !previousStep?.completed;
+          const isExpanded = expandedStepId === step.id;
+          const guide = getEffectiveGuide(step);
+          const currentGuide = language === 'hi' ? guide.hi : guide.en;
+          const effectiveScript = getEffectiveScript(step);
+          const stepKey = step.key || step.label?.toLowerCase().replace(/[^a-z]+/g, '_');
+
+          return (
+            <div key={step.id} className={`rounded-xl border transition-all ${step.completed ? 'border-green-500/10 bg-green-500/5' : isLocked ? 'border-white/5 bg-dark-700/40 opacity-75' : 'border-white/5 bg-dark-600/30 hover:border-brand-500/20'}`}>
+              <div
+                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer"
+                onClick={() => !isLocked && toggleExpand(step.id)}
+                title={isLocked ? `Complete "${previousStep?.label || 'previous step'}" first` : ''}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); if (!isLocked) toggleStep(step.id); }}
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${step.completed ? 'bg-green-500 border-green-500' : isLocked ? 'border-gray-700 bg-dark-800 cursor-not-allowed' : 'border-brand-400 bg-dark-700 hover:border-brand-300'}`}
+                  aria-label={step.completed ? 'Mark step incomplete' : 'Mark step complete'}
+                >
+                  {step.completed ? <Check size={10} className="text-white" strokeWidth={3} /> : isLocked ? <span className="text-[8px] text-gray-500">🔒</span> : null}
+                </button>
+                <span className="text-[10px] font-bold text-gray-600 w-5">{i + 1}</span>
+                <span className={`text-xs flex-1 ${step.completed ? 'text-green-400 line-through opacity-70' : isLocked ? 'text-gray-500' : 'text-gray-300'}`}>
+                  {language === 'hi' ? (step.label ? step.label : (currentGuide.hi?.title || step.label)) : step.label}
+                </span>
+                {!isLocked && (
+                  <span className="flex items-center justify-center w-5 h-5 rounded-md bg-dark-800/70 text-gray-400">
+                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </span>
+                )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); adminRemoveStep(step); }}
+                    className="w-5 h-5 flex items-center justify-center rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/25 transition-colors"
+                    title={`Remove "${step.label}"`}
+                  >
+                    <Minus size={10} strokeWidth={3} />
+                  </button>
+                )}
+                {isLocked && <span className="text-[9px] uppercase tracking-wide text-gray-500">Locked</span>}
+              </div>
+
+              {isExpanded && !isLocked && (
+                <div className="border-t border-white/5 px-3 py-3 bg-dark-900/30">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-300">{language === 'hi' ? 'गाइड' : 'Guide'}</p>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
+                      className="flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[9px] text-gray-300"
+                    >
+                      <Globe size={10} /> {language === 'en' ? 'हिंदी' : 'EN'}
+                    </button>
+                  </div>
+                  <p className="text-sm font-medium text-white mb-1">{currentGuide.title}</p>
+                  <p className="text-[11px] leading-relaxed text-gray-300">{currentGuide.summary}</p>
+                  <div className="mt-2 rounded-lg border border-brand-500/20 bg-brand-600/5 p-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-300 mb-1">{language === 'hi' ? 'उदाहरण' : 'Example'}</p>
+                    <p className="text-[11px] leading-relaxed text-gray-200">{currentGuide.example}</p>
+                  </div>
+
+                  {/* Admin Edit Button */}
+                  {isAdmin && editingStep !== stepKey && (
+                    <button
+                      onClick={() => { setEditingStep(stepKey); setEditForm({ title: currentGuide.title || '', summary: currentGuide.summary || '', example: currentGuide.example || '', script: effectiveScript || '' }); }}
+                      className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/30 transition-colors"
+                    >
+                      <Edit3 size={12} /> Edit Guide & Script (applies to all teams)
+                    </button>
+                  )}
+
+                  {/* Admin Edit Form */}
+                  {isAdmin && editingStep === stepKey && (
+                    <div className="mt-3 p-3 rounded-xl bg-dark-900 border border-amber-500/20 space-y-2">
+                      <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Edit Guide (visible to all users)</p>
+                      <input type="text" placeholder="Title" value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} className="input-field text-xs" />
+                      <textarea placeholder="Summary / Description" value={editForm.summary} onChange={e => setEditForm({ ...editForm, summary: e.target.value })} className="input-field text-xs" rows={2} />
+                      <textarea placeholder="Example" value={editForm.example} onChange={e => setEditForm({ ...editForm, example: e.target.value })} className="input-field text-xs" rows={2} />
+                      <textarea placeholder="Script template" value={editForm.script} onChange={e => setEditForm({ ...editForm, script: e.target.value })} className="input-field text-xs" rows={4} />
+                      <div className="flex gap-2">
+                        <button onClick={() => saveGuide(stepKey)} className="btn-primary text-xs px-3 py-1.5">Save for All Users</button>
+                        <button onClick={() => setEditingStep(null)} className="text-xs text-gray-500 hover:text-white">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sample Script */}
+                  <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-600/5 p-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-400 flex items-center gap-1">
+                        <MessageCircle size={10} /> Sample Script
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(effectiveScript.replace(/\\n/g, '\n'));
+                          toast.success('Script copied to clipboard!');
+                        }}
+                        className="text-[9px] font-medium px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-gray-200 whitespace-pre-line">{effectiveScript}</p>
+                  </div>
+
+                  {/* Media Upload & Display */}
+                  <JourneyStepMedia stepKey={step.key} />
+
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/playbook?chapter=${step.order}`)}
+                    className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 text-xs font-medium hover:bg-brand-500/20 transition-colors"
+                  >
+                    <BookOpen size={13} />
+                    {language === 'hi' ? `प्लेबुक चैप्टर ${step.order} पढ़ें` : `Read Playbook Chapter ${step.order}`}
+                  </button>
+                  {lead.phone && (
+                    <a
+                      href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '').replace(/^0+/, '91')}?text=${encodeURIComponent(effectiveScript.replace(/\\n/g, '\n').replace(/\[Name\]/g, lead.fullName || ''))}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-medium hover:bg-green-500/20 transition-colors"
+                    >
+                      <MessageCircle size={13} />
+                      {language === 'hi' ? 'WhatsApp पर भेजें' : 'Send via WhatsApp'}
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -154,6 +154,7 @@ model JourneyStep {
   label       String
   description String?
   order       Int
+  category    String    @default("COMMON")
   type        String    @default("text")
   asset       String?
   createdAt   DateTime  @default(now())
