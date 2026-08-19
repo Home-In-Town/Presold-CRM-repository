@@ -138,6 +138,15 @@ export default function LeadDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
+
+  // Build absolute URL for uploaded files
+  const apiBase = import.meta.env.VITE_API_URL || '';
+  const serverBase = apiBase.replace(/\/api\/?$/, '');
+  const getFileUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return `${serverBase}${url}`;
+  };
   const [lead, setLead] = useState(null);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState('');
@@ -533,20 +542,56 @@ export default function LeadDetail() {
           {/* File Upload */}
           <div className="glass-card p-5">
             <h3 className="text-sm font-semibold text-white mb-3">Files</h3>
-            <label className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-6 cursor-pointer hover:border-brand-500/30 transition-colors">
-              <Upload size={20} className="text-gray-500 mb-2" />
-              <span className="text-xs text-gray-500">Upload file</span>
-              <input type="file" className="hidden" onChange={handleFileUpload} />
-            </label>
+            {isAdmin && (
+              <label className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-6 cursor-pointer hover:border-brand-500/30 transition-colors mb-3">
+                <Upload size={20} className="text-gray-500 mb-2" />
+                <span className="text-xs text-gray-500">Upload file</span>
+                <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" />
+              </label>
+            )}
             {lead.files?.length > 0 && (
-              <div className="space-y-2 mt-3">
-                {lead.files.map(f => (
-                  <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-600/30 hover:bg-dark-600/50 transition-colors">
-                    {f.type === 'IMAGE' ? <Image size={12} className="text-pink-400" /> : f.type === 'VIDEO' ? <Video size={12} className="text-red-400" /> : <FileText size={12} className="text-blue-400" />}
-                    <span className="text-[10px] text-gray-400 truncate flex-1">{f.originalName}</span>
-                  </a>
-                ))}
+              <div className="space-y-2">
+                {lead.files.map(f => {
+                  const fileUrl = getFileUrl(f.url);
+                  return (
+                    <div key={f.id} className="rounded-xl border border-white/8 bg-dark-700/40 overflow-hidden">
+                      {/* Inline preview */}
+                      {f.type === 'IMAGE' && (
+                        <img
+                          src={fileUrl}
+                          alt={f.originalName}
+                          className="w-full max-h-40 object-cover cursor-pointer"
+                          onClick={() => window.open(fileUrl, '_blank')}
+                        />
+                      )}
+                      {f.type === 'VIDEO' && (
+                        <video src={fileUrl} controls className="w-full max-h-40 bg-black" />
+                      )}
+                      {/* File row */}
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        {f.type === 'IMAGE' ? <Image size={12} className="text-pink-400 flex-shrink-0" /> :
+                         f.type === 'VIDEO' ? <Video size={12} className="text-red-400 flex-shrink-0" /> :
+                         <FileText size={12} className="text-blue-400 flex-shrink-0" />}
+                        <span className="text-[10px] text-gray-400 truncate flex-1">{f.originalName}</span>
+                        <a
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          download={f.originalName}
+                          onClick={e => e.stopPropagation()}
+                          className="text-[9px] px-2 py-0.5 rounded-md bg-brand-500/15 text-brand-400 hover:bg-brand-500/25 transition-colors flex-shrink-0"
+                          title="Download"
+                        >
+                          ↓
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+            )}
+            {!lead.files?.length && !isAdmin && (
+              <p className="text-xs text-gray-600 text-center py-4">No files uploaded</p>
             )}
           </div>
 
@@ -761,6 +806,17 @@ function JourneyBlock({ title, steps, completedCount, progress, category, langua
 function JourneyStepMedia({ stepKey }) {
   const [media, setMedia] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
+
+  // Build absolute URL for uploaded files
+  const apiBase = import.meta.env.VITE_API_URL || '';
+  const serverBase = apiBase.replace(/\/api\/?$/, '');
+  const getFileUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return `${serverBase}${url}`;
+  };
 
   useEffect(() => {
     loadMedia();
@@ -781,7 +837,7 @@ function JourneyStepMedia({ stepKey }) {
       const fd = new FormData();
       fd.append('file', file);
       await api.post(`/journey/media/${stepKey}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      toast.success('Uploaded! Awaiting admin approval.');
+      toast.success('Uploaded successfully!');
       loadMedia();
     } catch {
       toast.error('Upload failed');
@@ -795,37 +851,79 @@ function JourneyStepMedia({ stepKey }) {
       {/* Approved media display */}
       {media.filter(m => m.approved).length > 0 && (
         <div className="space-y-2 mb-2">
-          {media.filter(m => m.approved).map(m => (
-            <div key={m.id} className="rounded-lg overflow-hidden border border-white/10">
-              {m.type === 'IMAGE' && <img src={m.url} alt={m.originalName} className="w-full max-h-48 object-cover" />}
-              {m.type === 'VIDEO' && <video src={m.url} controls className="w-full max-h-48" />}
-            </div>
-          ))}
+          {media.filter(m => m.approved).map(m => {
+            const fileUrl = getFileUrl(m.url);
+            return (
+              <div key={m.id} className="rounded-lg overflow-hidden border border-white/10">
+                {m.type === 'IMAGE' && (
+                  <>
+                    <img
+                      src={fileUrl}
+                      alt={m.originalName}
+                      className="w-full max-h-48 object-cover cursor-pointer"
+                      onClick={() => window.open(fileUrl, '_blank')}
+                    />
+                    <div className="flex items-center justify-between px-2 py-1.5 bg-dark-800/60">
+                      <span className="text-[9px] text-gray-500 truncate flex-1">{m.originalName}</span>
+                      <a href={fileUrl} download={m.originalName} target="_blank" rel="noreferrer"
+                        className="text-[9px] px-2 py-0.5 rounded bg-brand-500/15 text-brand-400 hover:bg-brand-500/25 ml-2 flex-shrink-0">
+                        ↓ Download
+                      </a>
+                    </div>
+                  </>
+                )}
+                {m.type === 'VIDEO' && (
+                  <>
+                    <video src={fileUrl} controls className="w-full max-h-48 bg-black" />
+                    <div className="flex items-center justify-between px-2 py-1.5 bg-dark-800/60">
+                      <span className="text-[9px] text-gray-500 truncate flex-1">{m.originalName}</span>
+                      <a href={fileUrl} download={m.originalName} target="_blank" rel="noreferrer"
+                        className="text-[9px] px-2 py-0.5 rounded bg-brand-500/15 text-brand-400 hover:bg-brand-500/25 ml-2 flex-shrink-0">
+                        ↓ Download
+                      </a>
+                    </div>
+                  </>
+                )}
+                {m.type !== 'IMAGE' && m.type !== 'VIDEO' && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-dark-800/60">
+                    <FileText size={12} className="text-blue-400 flex-shrink-0" />
+                    <span className="text-[10px] text-gray-400 truncate flex-1">{m.originalName}</span>
+                    <a href={fileUrl} download={m.originalName} target="_blank" rel="noreferrer"
+                      className="text-[9px] px-2 py-0.5 rounded bg-brand-500/15 text-brand-400 hover:bg-brand-500/25 flex-shrink-0">
+                      ↓ Download
+                    </a>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Pending uploads (show to uploader as "pending") */}
-      {media.filter(m => !m.approved).length > 0 && (
+      {/* Pending uploads — shown only to admin */}
+      {isAdmin && media.filter(m => !m.approved).length > 0 && (
         <div className="space-y-1 mb-2">
           {media.filter(m => !m.approved).map(m => (
             <div key={m.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <span className="text-[10px] text-amber-400">⏳ Pending approval:</span>
+              <span className="text-[10px] text-amber-400">⏳ Pending:</span>
               <span className="text-[10px] text-gray-400 truncate flex-1">{m.originalName}</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Upload button */}
-      <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-white/10 bg-dark-700/30 cursor-pointer hover:border-pink-500/30 hover:bg-pink-500/5 transition-colors">
-        {uploading ? (
-          <div className="w-3 h-3 border-2 border-pink-400 border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <Camera size={12} className="text-pink-400" />
-        )}
-        <span className="text-[10px] text-gray-400">{uploading ? 'Uploading...' : 'Upload Photo / Video'}</span>
-        <input type="file" accept="image/*,video/*" className="hidden" onChange={handleUpload} disabled={uploading} />
-      </label>
+      {/* Upload button — admin only */}
+      {isAdmin && (
+        <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-white/10 bg-dark-700/30 cursor-pointer hover:border-pink-500/30 hover:bg-pink-500/5 transition-colors">
+          {uploading ? (
+            <div className="w-3 h-3 border-2 border-pink-400 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Camera size={12} className="text-pink-400" />
+          )}
+          <span className="text-[10px] text-gray-400">{uploading ? 'Uploading...' : 'Upload Photo / Video'}</span>
+          <input type="file" accept="image/*,video/*,application/pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
+        </label>
+      )}
     </div>
   );
 }
