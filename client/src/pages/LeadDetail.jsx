@@ -143,6 +143,7 @@ export default function LeadDetail() {
   const [note, setNote] = useState('');
   const [journeySteps, setJourneySteps] = useState([]);
   const [adsJourneySteps, setAdsJourneySteps] = useState([]);
+  const [journeyTab, setJourneyTab] = useState('COMMON');
   const [expandedStepId, setExpandedStepId] = useState(null);
   const [language, setLanguage] = useState('en');
   const [customGuides, setCustomGuides] = useState({});
@@ -355,60 +356,95 @@ export default function LeadDetail() {
             </div>
           </div>
 
-          {/* Lead Journey */}
-          <div className="glass-card p-5 border border-brand-500/20">
-            <JourneyBlock
-              title="Lead Journey"
-              steps={journeySteps}
-              completedCount={completedCount}
-              progress={progress}
-              category="COMMON"
-              language={language}
-              setLanguage={setLanguage}
-              isAdmin={isAdmin}
-              expandedStepId={expandedStepId}
-              toggleExpand={toggleExpand}
-              toggleStep={toggleStep}
-              adminAdjustJourney={adminAdjustJourney}
-              adminRemoveStep={adminRemoveStep}
-              getEffectiveGuide={getEffectiveGuide}
-              getEffectiveScript={getEffectiveScript}
-              editingStep={editingStep}
-              setEditingStep={setEditingStep}
-              editForm={editForm}
-              setEditForm={setEditForm}
-              saveGuide={saveGuide}
-              lead={lead}
-              navigate={navigate}
-            />
-          </div>
+          {/* Journey — toggle between Lead Journey and Cold Lead Journey */}
+          <div className="glass-card p-5">
+            {/* Toggle buttons */}
+            <div className="flex items-center gap-2 mb-5">
+              <button
+                type="button"
+                onClick={() => setJourneyTab('COMMON')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                  journeyTab === 'COMMON'
+                    ? 'bg-brand-600 border-brand-500 text-white shadow-glow'
+                    : 'bg-dark-700/50 border-white/10 text-gray-400 hover:text-white hover:border-brand-500/40'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${journeyTab === 'COMMON' ? 'bg-white' : 'bg-brand-400'}`} />
+                Lead Journey
+                <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${journeyTab === 'COMMON' ? 'bg-white/20 text-white' : 'bg-brand-500/20 text-brand-400'}`}>
+                  {completedCount}/{journeySteps.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setJourneyTab('ADS')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                  journeyTab === 'ADS'
+                    ? 'bg-amber-600 border-amber-500 text-white shadow-glow'
+                    : 'bg-dark-700/50 border-white/10 text-gray-400 hover:text-white hover:border-amber-500/40'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${journeyTab === 'ADS' ? 'bg-white' : 'bg-amber-400'}`} />
+                Cold Lead Journey
+                <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${journeyTab === 'ADS' ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-400'}`}>
+                  {adsCompletedCount}/{adsJourneySteps.length}
+                </span>
+              </button>
+            </div>
 
-          {/* Cold Lead Journey */}
-          <div className="glass-card p-5 border border-amber-500/20">
-            <JourneyBlock
-              title="Cold Lead Journey"
-              steps={adsJourneySteps}
-              completedCount={adsCompletedCount}
-              progress={adsProgress}
-              category="ADS"
-              language={language}
-              setLanguage={setLanguage}
-              isAdmin={isAdmin}
-              expandedStepId={expandedStepId}
-              toggleExpand={toggleExpand}
-              toggleStep={toggleStep}
-              adminAdjustJourney={adminAdjustJourney}
-              adminRemoveStep={adminRemoveStep}
-              getEffectiveGuide={getEffectiveGuide}
-              getEffectiveScript={getEffectiveScript}
-              editingStep={editingStep}
-              setEditingStep={setEditingStep}
-              editForm={editForm}
-              setEditForm={setEditForm}
-              saveGuide={saveGuide}
-              lead={lead}
-              navigate={navigate}
-            />
+            {/* Active journey block */}
+            {journeyTab === 'COMMON' && (
+              <JourneyBlock
+                title="Lead Journey"
+                steps={journeySteps}
+                completedCount={completedCount}
+                progress={progress}
+                category="COMMON"
+                language={language}
+                setLanguage={setLanguage}
+                isAdmin={isAdmin}
+                expandedStepId={expandedStepId}
+                toggleExpand={toggleExpand}
+                toggleStep={toggleStep}
+                adminAdjustJourney={adminAdjustJourney}
+                adminRemoveStep={adminRemoveStep}
+                getEffectiveGuide={getEffectiveGuide}
+                getEffectiveScript={getEffectiveScript}
+                editingStep={editingStep}
+                setEditingStep={setEditingStep}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                saveGuide={saveGuide}
+                lead={lead}
+                navigate={navigate}
+              />
+            )}
+            {journeyTab === 'ADS' && (
+              <JourneyBlock
+                title="Cold Lead Journey"
+                steps={adsJourneySteps}
+                completedCount={adsCompletedCount}
+                progress={adsProgress}
+                category="ADS"
+                language={language}
+                setLanguage={setLanguage}
+                isAdmin={isAdmin}
+                expandedStepId={expandedStepId}
+                toggleExpand={toggleExpand}
+                toggleStep={toggleStep}
+                adminAdjustJourney={adminAdjustJourney}
+                adminRemoveStep={adminRemoveStep}
+                getEffectiveGuide={getEffectiveGuide}
+                getEffectiveScript={getEffectiveScript}
+                editingStep={editingStep}
+                setEditingStep={setEditingStep}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                saveGuide={saveGuide}
+                lead={lead}
+                navigate={navigate}
+              />
+            )}
           </div>
 
           {/* Notes */}
