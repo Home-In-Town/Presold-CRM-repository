@@ -356,7 +356,7 @@ export default function LeadDetail() {
           </div>
 
           {/* Lead Journey */}
-          <div className="glass-card p-5">
+          <div className="glass-card p-5 border border-brand-500/20">
             <JourneyBlock
               title="Lead Journey"
               steps={journeySteps}
@@ -383,10 +383,10 @@ export default function LeadDetail() {
             />
           </div>
 
-          {/* Ads Lead Journey */}
-          <div className="glass-card p-5">
+          {/* Cold Lead Journey */}
+          <div className="glass-card p-5 border border-amber-500/20">
             <JourneyBlock
-              title="Ads Lead Journey"
+              title="Cold Lead Journey"
               steps={adsJourneySteps}
               completedCount={adsCompletedCount}
               progress={adsProgress}
@@ -538,15 +538,17 @@ export default function LeadDetail() {
 
 // ─── Journey Block Component ─────────────────────────────────────────────────
 function JourneyBlock({ title, steps, completedCount, progress, category, language, setLanguage, isAdmin, expandedStepId, toggleExpand, toggleStep, adminAdjustJourney, adminRemoveStep, getEffectiveGuide, getEffectiveScript, editingStep, setEditingStep, editForm, setEditForm, saveGuide, lead, navigate }) {
-  const gradientClass = category === 'ADS'
-    ? 'from-amber-500 to-orange-500'
-    : 'from-brand-500 to-green-500';
-  const borderAccent = category === 'ADS' ? 'border-amber-500/30' : 'border-brand-500/30';
+  const isAds = category === 'ADS';
+  const gradientClass = isAds ? 'from-amber-500 to-orange-500' : 'from-brand-500 to-green-500';
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        {/* Title badge — visually distinct per category */}
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${isAds ? 'bg-amber-500/15 border border-amber-500/30' : 'bg-brand-500/15 border border-brand-500/30'}`}>
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isAds ? 'bg-amber-400' : 'bg-brand-400'}`} />
+          <span className={`text-sm font-bold tracking-wide ${isAds ? 'text-amber-300' : 'text-brand-300'}`}>{title}</span>
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -561,7 +563,7 @@ function JourneyBlock({ title, steps, completedCount, progress, category, langua
                 type="button"
                 onClick={() => adminAdjustJourney('add', category)}
                 className="w-6 h-6 flex items-center justify-center rounded-lg bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-colors"
-                title={`Add new ${category === 'ADS' ? 'Ads' : 'Common'} journey step (Admin)`}
+                title={`Add new ${isAds ? 'Cold' : 'Common'} journey step (Admin)`}
               >
                 <Plus size={12} strokeWidth={3} />
               </button>
