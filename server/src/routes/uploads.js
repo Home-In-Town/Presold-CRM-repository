@@ -186,11 +186,20 @@ router.post('/lead/:leadId', authenticate, upload.single('file'), async (req, re
     else if (req.file.mimetype.startsWith('audio/')) type = 'VOICE';
     else if (req.file.mimetype.includes('pdf') || req.file.mimetype.includes('document')) type = 'DOCUMENT';
 
+    // Upload buffer to Cloudinary
+    const { uploadToCloudinary } = await import('../config/cloudinaryUpload.js');
+    const resourceType = type === 'VIDEO' ? 'video' : type === 'VOICE' ? 'video' : 'auto';
+    const { url, publicId } = await uploadToCloudinary(req.file.buffer, {
+      folder: 'presold-crm/leads',
+      resource_type: resourceType,
+      public_id: `lead_${req.params.leadId}_${Date.now()}`
+    });
+
     const file = await prisma.leadFile.create({
       data: {
-        name: req.file.filename,
+        name: publicId,
         originalName: req.file.originalname,
-        url: `/uploads/${req.file.filename}`,
+        url,
         type, size: req.file.size, mimeType: req.file.mimetype,
         leadId: req.params.leadId
       }
@@ -240,11 +249,20 @@ router.post('/assets', authenticate, (req, res) => {
         }
       }
 
+      // Upload buffer to Cloudinary
+      const { uploadToCloudinary } = await import('../config/cloudinaryUpload.js');
+      const resourceType = type === 'VIDEO' ? 'video' : type === 'VOICE' ? 'video' : 'auto';
+      const cloudFolder = folder ? `presold-crm/library/${folder}` : 'presold-crm/library';
+      const { url: cloudUrl, publicId } = await uploadToCloudinary(req.file.buffer, {
+        folder: cloudFolder,
+        resource_type: resourceType
+      });
+
       const asset = await prisma.asset.create({
         data: {
-          name: req.file.filename,
+          name: publicId,
           originalName: req.file.originalname,
-          url: `/uploads/${req.file.filename}`,
+          url: cloudUrl,
           type, size: req.file.size, mimeType: req.file.mimetype,
           folder: folder || 'general',
           tags: JSON.stringify(parsedTags),

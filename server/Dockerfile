@@ -17,6 +17,9 @@ COPY src ./src
 # Generate Prisma client
 RUN npx prisma generate
 
+# Create uploads dir as fallback for local dev (production uses Cloudinary)
+RUN mkdir -p /app/uploads
+
 # Remove devDependencies to keep image smaller
 RUN npm prune --production
 

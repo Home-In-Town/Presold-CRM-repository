@@ -1,16 +1,8 @@
 import multer from 'multer';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(process.cwd(), 'uploads'));
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${uuidv4()}${ext}`);
-  }
-});
+// Use memory storage — files are uploaded to Cloudinary, not saved to disk
+// This works on stateless servers like Cloud Run where disk is ephemeral
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowed = [

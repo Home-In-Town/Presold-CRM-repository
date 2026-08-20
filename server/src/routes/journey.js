@@ -235,19 +235,27 @@ router.post('/media/:stepKey', authenticate, upload.single('file'), async (req, 
     if (req.file.mimetype.startsWith('image/')) type = 'IMAGE';
     else if (req.file.mimetype.startsWith('video/')) type = 'VIDEO';
 
+    // Upload to Cloudinary
+    const { uploadToCloudinary } = await import('../config/cloudinaryUpload.js');
+    const resourceType = type === 'VIDEO' ? 'video' : 'auto';
+    const { url: cloudUrl, publicId } = await uploadToCloudinary(req.file.buffer, {
+      folder: `presold-crm/journey/${req.params.stepKey}`,
+      resource_type: resourceType
+    });
+
     const media = await prisma.journeyMedia.create({
       data: {
-        url: `/uploads/${req.file.filename}`,
+        url: cloudUrl,
         originalName: req.file.originalname,
         type,
         size: req.file.size,
         mimeType: req.file.mimetype,
         stepKey: req.params.stepKey,
         uploadedById: req.user.id,
-        approved: false
+        approved: req.user.role === 'ADMIN' // admin uploads are auto-approved
       }
     });
-    res.status(201).json({ media, message: 'Uploaded. Waiting for admin approval.' });
+    res.status(201).json({ media, message: req.user.role === 'ADMIN' ? 'Uploaded successfully.' : 'Uploaded. Waiting for admin approval.' });
   } catch (err) {
     console.error('Journey media upload error:', err);
     res.status(500).json({ error: 'Upload failed' });
