@@ -2,6 +2,7 @@ import { Router } from 'express';
 import prisma from '../config/database.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { upload } from '../middleware/upload.js';
+import { uploadToGridFS } from '../config/gridfs.js';
 
 const router = Router();
 
@@ -227,7 +228,7 @@ router.put('/guides/:stepKey', authenticate, authorize('ADMIN'), async (req, res
   }
 });
 
-// POST /journey/media/:stepKey — user uploads photo/video for a journey step
+// POST /journey/media/:stepKey — admin uploads photo/video for a journey step
 router.post('/media/:stepKey', authenticate, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -235,17 +236,16 @@ router.post('/media/:stepKey', authenticate, upload.single('file'), async (req, 
     if (req.file.mimetype.startsWith('image/')) type = 'IMAGE';
     else if (req.file.mimetype.startsWith('video/')) type = 'VIDEO';
 
-    // Upload to Cloudinary
-    const { uploadToCloudinary } = await import('../config/cloudinaryUpload.js');
-    const resourceType = type === 'VIDEO' ? 'video' : 'auto';
-    const { url: cloudUrl, publicId } = await uploadToCloudinary(req.file.buffer, {
-      folder: `presold-crm/journey/${req.params.stepKey}`,
-      resource_type: resourceType
-    });
+    // Upload to GridFS (MongoDB)
+    const { url, fileId } = await uploadToGridFS(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
 
     const media = await prisma.journeyMedia.create({
       data: {
-        url: cloudUrl,
+        url,
         originalName: req.file.originalname,
         type,
         size: req.file.size,

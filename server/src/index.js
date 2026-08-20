@@ -7,6 +7,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 
 import prisma from './config/database.js';
+import { streamFromGridFS } from './config/gridfs.js';
 import authRoutes from './routes/auth.js';
 import leadRoutes from './routes/leads.js';
 import pipelineRoutes from './routes/pipeline.js';
@@ -74,8 +75,17 @@ app.use(express.urlencoded({ extended: true }));
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500 });
 app.use('/api', limiter);
 
-// Static files
+// Static files (local dev fallback)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Serve GridFS files — /api/files/:fileId
+app.get('/api/files/:fileId', async (req, res) => {
+  try {
+    await streamFromGridFS(req.params.fileId, res);
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to serve file' });
+  }
+});
 
 // Routes
 app.use('/api/auth', authRoutes);

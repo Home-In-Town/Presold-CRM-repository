@@ -2,7 +2,7 @@ import { Router } from 'express';
 import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { upload } from '../middleware/upload.js';
-import { uploadToCloudinary } from '../config/cloudinaryUpload.js';
+import { uploadToGridFS, streamFromGridFS, deleteFromGridFS } from '../config/gridfs.js';
 
 const router = Router();
 
@@ -14,28 +14,21 @@ const getFileType = (mimetype) => {
   return 'DOCUMENT';
 };
 
-const getCloudinaryResourceType = (type) => {
-  if (type === 'VIDEO' || type === 'VOICE') return 'video';
-  if (type === 'IMAGE') return 'image';
-  return 'auto';
-};
-
 // ─── Upload file for a lead ──────────────────────────────────────────────────
 router.post('/lead/:leadId', authenticate, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const type = getFileType(req.file.mimetype);
-    const resourceType = getCloudinaryResourceType(type);
-
-    const { url, publicId } = await uploadToCloudinary(req.file.buffer, {
-      folder: 'presold-crm/leads',
-      resource_type: resourceType
-    });
+    const { url, fileId } = await uploadToGridFS(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
 
     const file = await prisma.leadFile.create({
       data: {
-        name: publicId,
+        name: fileId,
         originalName: req.file.originalname,
         url,
         type,
@@ -68,22 +61,19 @@ router.post('/assets', authenticate, upload.single('file'), async (req, res) => 
 
     const { folder, tags, coverPhoto, logoUrl, logoPosition } = req.body;
     const type = getFileType(req.file.mimetype);
-    const resourceType = getCloudinaryResourceType(type);
-    const cloudFolder = folder
-      ? `presold-crm/library/${folder}`
-      : 'presold-crm/library';
 
     let parsedTags = [];
     try { parsedTags = tags ? JSON.parse(tags) : []; } catch { parsedTags = []; }
 
-    const { url, publicId } = await uploadToCloudinary(req.file.buffer, {
-      folder: cloudFolder,
-      resource_type: resourceType
-    });
+    const { url, fileId } = await uploadToGridFS(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
 
     const asset = await prisma.asset.create({
       data: {
-        name: publicId,
+        name: fileId,
         originalName: req.file.originalname,
         url,
         type,
@@ -120,7 +110,6 @@ router.put('/assets/:id/cover', authenticate, async (req, res) => {
     });
     res.json(asset);
   } catch (err) {
-    console.error('Cover update error:', err);
     res.status(500).json({ error: 'Unable to update cover photo' });
   }
 });
@@ -148,6 +137,8 @@ router.get('/assets', authenticate, async (req, res) => {
 // ─── Delete asset ────────────────────────────────────────────────────────────
 router.delete('/assets/:id', authenticate, async (req, res) => {
   try {
+    const asset = await prisma.asset.findUnique({ where: { id: req.params.id } });
+    if (asset?.name) await deleteFromGridFS(asset.name);
     await prisma.asset.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
     res.json({ message: 'Asset deleted' });
   } catch (err) {
@@ -155,32 +146,25 @@ router.delete('/assets/:id', authenticate, async (req, res) => {
   }
 });
 
-// ─── Download asset — redirect to Cloudinary URL ─────────────────────────────
-// Since files are now on Cloudinary, we redirect to the CDN URL directly.
-// This also supports the legacy disk-based URLs gracefully.
+// ─── Download asset (redirect to serve endpoint) ─────────────────────────────
 router.get('/assets/:id/download', authenticate, async (req, res) => {
   try {
     const asset = await prisma.asset.findUnique({ where: { id: req.params.id } });
-    if (!asset || asset.deletedAt) {
-      return res.status(404).json({ error: 'Asset not found' });
+    if (!asset || asset.deletedAt) return res.status(404).json({ error: 'Asset not found' });
+
+    // If it's a GridFS URL, stream with download header
+    if (asset.url?.startsWith('/api/files/')) {
+      const fileId = asset.url.replace('/api/files/', '');
+      res.setHeader('Content-Disposition', `attachment; filename="${asset.originalName}"`);
+      await streamFromGridFS(fileId, res);
+      return;
     }
 
-    if (!asset.url) {
-      return res.status(404).json({ error: 'No file URL found for this asset' });
-    }
-
-    // If the URL is a Cloudinary URL, redirect to it with fl_attachment for forced download
-    if (asset.url.startsWith('https://res.cloudinary.com')) {
-      // Insert fl_attachment into the Cloudinary URL to force download
-      const downloadUrl = asset.url.replace('/upload/', `/upload/fl_attachment:${encodeURIComponent(asset.originalName || 'file')}/`);
-      return res.redirect(downloadUrl);
-    }
-
-    // Fallback: redirect to the URL directly
-    return res.redirect(asset.url);
+    // Fallback for legacy URLs
+    res.redirect(asset.url);
   } catch (err) {
     console.error('Download error:', err);
-    res.status(500).json({ error: err.message || 'Failed to download asset' });
+    res.status(500).json({ error: 'Failed to download asset' });
   }
 });
 
