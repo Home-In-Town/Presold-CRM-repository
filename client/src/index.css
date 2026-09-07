@@ -75,4 +75,7 @@
     @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-accent-400;
   }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .custom-scroll { scrollbar-width: thin; scrollbar-color: theme('colors.dark.400') transparent; }
+  .custom-scroll::-webkit-scrollbar { width: 6px; }
+  .custom-scroll::-webkit-scrollbar-thumb { @apply bg-dark-400 rounded-full; }
 }

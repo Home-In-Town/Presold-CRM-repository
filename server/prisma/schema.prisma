@@ -38,7 +38,9 @@ model User {
   sessions            Session[]
   auditLogs           AuditLog[]
   bookmarks           Bookmark[]
-  tasks               Task[]
+  tasks               Task[]               @relation("TaskOwner")
+  createdTasks        Task[]               @relation("TaskCreator")
+  createdOpportunities Opportunity[]       @relation("OpportunityCreator")
   playbookCompletions PlaybookCompletion[]
 }
 
@@ -371,8 +373,59 @@ model Task {
   priority    String    @default("MEDIUM")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  userId      String    @db.ObjectId
-  user        User      @relation(fields: [userId], references: [id])
+
+  // Shared task pool / claim support.
+  // pooled = true  -> task lives in the shared pool and can be claimed by any sales member.
+  // pooled = false -> classic personal task (owned directly by userId).
+  pooled      Boolean   @default(false)
+  claimedAt   DateTime?
+
+  // Field-visit metadata shown on pooled opportunity cards.
+  projectName String?              // e.g. name of the project / site to visit
+  photoUrl    String?              // served image url (GridFS: /api/files/:id)
+  photoFileId String?              // GridFS file id, kept for deletion
+  locationLink String?             // raw Google Maps link pasted by admin
+  latitude    Float?               // parsed from the maps link when possible
+  longitude   Float?
+
+  // Owner of the task. For personal tasks this is the creator. For pooled tasks
+  // this is null until a sales member claims it, at which point it is set to them.
+  userId      String?   @db.ObjectId
+  user        User?     @relation("TaskOwner", fields: [userId], references: [id])
+
+  // Admin who created a pooled task.
+  createdById String?   @db.ObjectId
+  createdBy   User?     @relation("TaskCreator", fields: [createdById], references: [id])
+
+  // A pooled task belongs to one Opportunity (project). Multiple tasks share
+  // the same opportunity's project name, photo, location and priority.
+  opportunityId String?      @db.ObjectId
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+}
+
+// A pooled opportunity == one project/site. It groups multiple tasks that can
+// each be claimed independently by different sales members.
+model Opportunity {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  projectName  String
+  address      String?              // human-readable address / area shown on the card
+  description  String?
+  priority     String   @default("MEDIUM")
+
+  // Site metadata shown once on the opportunity card.
+  photoUrl     String?
+  photoFileId  String?
+  locationLink String?
+  latitude     Float?
+  longitude    Float?
+
+  createdById  String?  @db.ObjectId
+  createdBy    User?    @relation("OpportunityCreator", fields: [createdById], references: [id])
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tasks        Task[]
 }
 
 model Setting {
