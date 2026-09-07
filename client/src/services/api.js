@@ -23,4 +23,24 @@ api.interceptors.response.use(
   }
 );
 
+// Resolve a server-relative file path (e.g. "/api/files/:id") into a fully
+// qualified URL that works in both dev (proxy) and prod (separate API origin).
+export function resolveFileUrl(pathOrUrl) {
+  if (!pathOrUrl) return '';
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+
+  const base = import.meta.env.VITE_API_URL || '/api';
+  // If the API base is absolute, derive its origin and join the path.
+  if (/^https?:\/\//i.test(base)) {
+    try {
+      const origin = new URL(base).origin;
+      return `${origin}${pathOrUrl}`;
+    } catch {
+      return pathOrUrl;
+    }
+  }
+  // Relative base (dev): the vite proxy handles /api and /uploads.
+  return pathOrUrl;
+}
+
 export default api;
