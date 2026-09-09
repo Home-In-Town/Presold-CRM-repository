@@ -282,7 +282,7 @@ export default function Leads() {
 }
 
 function AddLeadModal({ onClose, onAdded }) {
-  const [form, setForm] = useState({ fullName: '', phone: '', email: '', company: '', location: '', budget: '', source: 'INSTAGRAM_DM', leadType: 'INDIVIDUAL', temperature: 'WARM', priority: 'MEDIUM', adsRunning: false, notes: '' });
+  const [form, setForm] = useState({ fullName: '', phone: '', email: '', company: '', location: '', locationLink: '', budget: '', source: 'INSTAGRAM_DM', leadType: 'INDIVIDUAL', temperature: 'WARM', priority: 'MEDIUM', adsRunning: false, notes: '' });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -320,6 +320,7 @@ function AddLeadModal({ onClose, onAdded }) {
             <input type="text" placeholder="Location" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="input-field text-sm" />
             <input type="text" placeholder="Budget" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} className="input-field text-sm" />
           </div>
+          <input type="url" placeholder="Google Maps location link (optional)" value={form.locationLink} onChange={e => setForm({ ...form, locationLink: e.target.value })} className="input-field text-sm w-full" />
           <div className="grid grid-cols-2 gap-3">
             <select value={form.leadType} onChange={e => setForm({ ...form, leadType: e.target.value })} className="input-field text-sm">
               {LEAD_TYPES.map(type => <option key={type} value={type}>{type.replace('_', ' ')}</option>)}

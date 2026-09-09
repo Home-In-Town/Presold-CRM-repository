@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
+import { resolveLatLngFromMapsLink } from '../utils/geo.js';
 
 const router = Router();
 
@@ -148,8 +149,11 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /leads — create (auto-assigned to current user)
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { fullName, phone, email, company, location, budget, timeline, source, temperature, priority, leadType, adsRunning, notes } = req.body;
+    const { fullName, phone, email, company, location, locationLink, budget, timeline, source, temperature, priority, leadType, adsRunning, notes } = req.body;
     if (!fullName || !phone) return res.status(400).json({ error: 'Name and phone required' });
+
+    // Resolve coordinates from a pasted Google Maps link (expands short links).
+    const coords = locationLink ? await resolveLatLngFromMapsLink(locationLink) : null;
 
     const lead = await prisma.lead.create({
       data: {
@@ -159,6 +163,9 @@ router.post('/', authenticate, async (req, res) => {
         temperature: temperature || 'WARM',
         priority: priority || 'MEDIUM',
         adsRunning: adsRunning || false,
+        locationLink: locationLink?.trim() || null,
+        latitude: coords?.lat ?? null,
+        longitude: coords?.lng ?? null,
         assignedToId: req.user.id,
         createdById: req.user.id   // permanent — never changes even if lead is reassigned
       },

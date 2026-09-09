@@ -72,6 +72,9 @@ model Lead {
   company       String?
   leadType      String    @default("INDIVIDUAL")
   location      String?
+  locationLink  String?              // Google Maps link pasted when creating the lead
+  latitude      Float?               // parsed from the maps link when possible
+  longitude     Float?
   budget        String?
   timeline      String?
   source        String    @default("INSTAGRAM_DM")
@@ -101,6 +104,7 @@ model Lead {
   activities      LeadActivity[]
   files           LeadFile[]
   journeyProgress JourneyProgress[]
+  tasks           Task[]
 }
 
 model LeadNote {
@@ -401,6 +405,11 @@ model Task {
   // the same opportunity's project name, photo, location and priority.
   opportunityId String?      @db.ObjectId
   opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+
+  // A task can be attached to a Lead (admin adds tasks per lead, shown in the
+  // Tasks section's Leads view).
+  leadId        String?      @db.ObjectId
+  lead          Lead?        @relation(fields: [leadId], references: [id])
 }
 
 // A pooled opportunity == one project/site. It groups multiple tasks that can
