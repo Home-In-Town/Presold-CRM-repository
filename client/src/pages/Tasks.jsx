@@ -57,8 +57,7 @@ function PriorityBadge({ priority }) {
   );
 }
 
-// One opportunity (project) card. The photo/name/priority/location show once;
-// its tasks render as a horizontal, scrollable row of individually claimable chips.
+// One opportunity (project) card — mobile-first layout.
 function OpportunityCard({ opp, userPos, onClaim, claiming, initiated, canDelete, onDelete }) {
   const dist = useMemo(() => {
     if (!userPos || opp.latitude == null || opp.longitude == null) return null;
@@ -67,102 +66,85 @@ function OpportunityCard({ opp, userPos, onClaim, claiming, initiated, canDelete
 
   const tasks = opp.tasks || [];
   const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
-  // Name of whoever claimed the project (first claimed task's owner).
   const claimant = tasks.find(t => t.user?.name)?.user?.name || null;
-
   const locationText = opp.address || null;
 
   return (
-    <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-hidden">
-      {/* Top: photo + project details (mirrors the mobile opportunity card) */}
-      <div className="flex gap-3 p-3">
-        {/* Photo with "Opportunity" ribbon */}
-        <div className="relative w-24 h-24 rounded-xl bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
-          {opp.photoUrl ? (
-            <img src={resolveFileUrl(opp.photoUrl)} alt={opp.projectName} className="w-full h-full object-cover" />
-          ) : (
-            <ImageIcon size={24} className="text-gray-600" />
-          )}
-          <span className={`absolute top-1 left-0 text-white text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-r-md shadow ${opp.type === 'lead' ? 'bg-emerald-600' : 'bg-brand-600'}`}>
-            {opp.type === 'lead' ? 'Lead' : 'Opportunity'}
+    <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-hidden w-full">
+      {/* Photo + details row */}
+      <div className="flex gap-2.5 p-3">
+        {/* Photo */}
+        <div className="relative w-16 h-16 rounded-xl bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
+          {opp.photoUrl
+            ? <img src={resolveFileUrl(opp.photoUrl)} alt={opp.projectName} className="w-full h-full object-cover" />
+            : <ImageIcon size={20} className="text-gray-600" />}
+          <span className={`absolute top-1 left-0 text-white text-[7px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r-md shadow leading-none ${opp.type === 'lead' ? 'bg-emerald-600' : 'bg-brand-600'}`}>
+            {opp.type === 'lead' ? 'Lead' : 'Opp'}
           </span>
         </div>
 
         {/* Details */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-base font-bold text-white leading-tight break-words">{opp.projectName}</p>
+          <div className="flex items-start justify-between gap-1">
+            <p className="text-sm font-bold text-white leading-tight break-words min-w-0 flex-1">{opp.projectName}</p>
             {canDelete && (
-              <button onClick={() => onDelete(opp)} title={opp.type === 'lead' ? 'Remove lead tasks' : 'Delete project'} className="p-1 rounded hover:bg-red-500/10 text-gray-600 hover:text-red-400 flex-shrink-0"><Trash2 size={14} /></button>
+              <button onClick={() => onDelete(opp)} className="p-1 flex-shrink-0 text-gray-600 hover:text-red-400">
+                <Trash2 size={13} />
+              </button>
             )}
           </div>
-
-          {/* Location line */}
           {locationText && (
-            <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{locationText}</p>
+            <p className="text-xs text-gray-400 mt-0.5 truncate">{locationText}</p>
           )}
-
-          {/* Distance + view location */}
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5">
-            {dist != null ? (
-              <span className="inline-flex items-center gap-1 text-sm font-semibold text-brand-300">
-                <Navigation size={13} /> {formatDistance(dist)}
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1">
+            <PriorityBadge priority={opp.priority} />
+            {dist != null && (
+              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-300">
+                <Navigation size={11} /> {formatDistance(dist)}
               </span>
-            ) : null}
+            )}
             {opp.locationLink && (
-              <a
-                href={opp.locationLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200"
-              >
-                <MapPin size={11} /> View location
+              <a href={opp.locationLink} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-0.5 text-[11px] text-brand-300 hover:text-brand-200">
+                <MapPin size={11} /> View
               </a>
             )}
           </div>
         </div>
       </div>
 
-      {/* Tag row: priority + task chips, horizontally scrollable */}
-      <div className="px-3 pb-3">
-        <div className="flex gap-2 overflow-x-auto custom-scroll pb-1 -mx-0.5 px-0.5">
-          <span className="flex-shrink-0">
-            <PriorityBadge priority={opp.priority} />
-          </span>
-          {tasks.map(t => (
-            <span
-              key={t.id}
-              className="flex-shrink-0 rounded-full border border-white/10 bg-dark-700/50 px-3 py-0.5 text-[11px] text-gray-200 whitespace-nowrap"
-            >
-              {t.title}
-            </span>
-          ))}
+      {/* Task chips — horizontal scroll inside the card */}
+      {tasks.length > 0 && (
+        <div className="px-3 pb-2 overflow-x-auto custom-scroll">
+          <div className="flex gap-1.5 w-max">
+            {tasks.map(t => (
+              <span key={t.id}
+                className="flex-shrink-0 rounded-full border border-white/10 bg-dark-700/50 px-2.5 py-0.5 text-[11px] text-gray-200 whitespace-nowrap">
+                {t.title}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Full-width claim button (claims all tasks in this project at once) */}
+      {/* Claim / Claimed */}
       {allClaimed ? (
-        <div className="w-full bg-dark-700/60 text-gray-400 text-sm font-semibold py-3 flex items-center justify-center gap-2">
-          <Check size={16} className="text-green-400" />
+        <div className="w-full bg-dark-700/60 text-gray-400 text-xs font-semibold py-2.5 flex items-center justify-center gap-1.5">
+          <Check size={14} className="text-green-400" />
           Claimed{claimant ? ` by ${claimant}` : ''}
         </div>
       ) : (
-        <button
-          onClick={() => onClaim(opp)}
-          disabled={claiming}
-          className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-3 flex items-center justify-center gap-2 transition-colors"
-        >
-          {claiming ? <Loader2 size={16} className="animate-spin" /> : <Hand size={16} />}
-          {claiming ? 'Claiming...' : (tasks.length > 1 ? 'Claim Tasks' : 'Claim Task')}
+        <button onClick={() => onClaim(opp)} disabled={claiming}
+          className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-2.5 flex items-center justify-center gap-2 transition-colors">
+          {claiming ? <Loader2 size={15} className="animate-spin" /> : <Hand size={15} />}
+          {claiming ? 'Claiming…' : tasks.length > 1 ? 'Claim Tasks' : 'Claim Task'}
         </button>
       )}
     </motion.div>
   );
 }
 
-// A lead row inside the Tasks section. Shows the lead name, location, distance,
-// and its tasks (as labels). Admins can add/remove tasks. Any user can claim
-// the lead's tasks with the Claim button.
+// Lead card — mobile-first, no horizontal overflow.
 function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, claiming }) {
   const [adding, setAdding] = useState(false);
   const [newTask, setNewTask] = useState('');
@@ -174,9 +156,11 @@ function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, c
   }, [userPos, lead.latitude, lead.longitude]);
 
   const tasks = lead.tasks || [];
-  const claimable = tasks.some(t => !t.userId);          // any unclaimed task
+  const claimable = tasks.some(t => !t.userId);
   const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
   const claimant = tasks.find(t => t.user?.name)?.user?.name || null;
+  const photoUrl = lead.files?.[0]?.url ? resolveFileUrl(lead.files[0].url) : null;
+
   const submitAdd = async () => {
     const val = newTask.trim();
     if (!val) return;
@@ -187,20 +171,16 @@ function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, c
     setAdding(false);
   };
 
-  const photoUrl = lead.files?.[0]?.url ? resolveFileUrl(lead.files[0].url) : null;
-
   return (
-    <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-hidden">
-      {/* Header: photo + lead details (matches OpportunityCard layout) */}
-      <div className="flex gap-3 p-3.5">
-        {/* Photo / placeholder */}
-        <div className="relative w-20 h-20 rounded-xl bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
-          {photoUrl ? (
-            <img src={photoUrl} alt={lead.fullName} className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-2xl font-bold text-brand-400/60">{lead.fullName[0]}</span>
-          )}
-          <span className="absolute top-1 left-0 bg-emerald-600 text-white text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-r-md shadow">
+    <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-hidden w-full">
+      {/* Photo + details row */}
+      <div className="flex gap-2.5 p-3">
+        {/* Photo / initial */}
+        <div className="relative w-16 h-16 rounded-xl bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
+          {photoUrl
+            ? <img src={photoUrl} alt={lead.fullName} className="w-full h-full object-cover" />
+            : <span className="text-xl font-bold text-brand-400/60">{lead.fullName[0]}</span>}
+          <span className="absolute top-1 left-0 bg-emerald-600 text-white text-[7px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r-md shadow leading-none">
             Lead
           </span>
         </div>
@@ -209,83 +189,82 @@ function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, c
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-white break-words leading-tight">{lead.fullName}</p>
           {(lead.company || lead.location) && (
-            <p className="text-xs text-gray-400 truncate mt-0.5">{[lead.company, lead.location].filter(Boolean).join(' · ')}</p>
+            <p className="text-xs text-gray-400 truncate mt-0.5">
+              {[lead.company, lead.location].filter(Boolean).join(' · ')}
+            </p>
           )}
-
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5">
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1">
             <PriorityBadge priority={lead.priority} />
             {dist != null && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-gray-300">
+              <span className="inline-flex items-center gap-0.5 text-[11px] text-gray-300">
                 <Navigation size={11} /> {formatDistance(dist)}
               </span>
             )}
             {lead.locationLink && (
               <a href={lead.locationLink} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200">
-                <MapPin size={11} /> View location
+                className="inline-flex items-center gap-0.5 text-[11px] text-brand-300 hover:text-brand-200">
+                <MapPin size={11} /> View
               </a>
             )}
           </div>
         </div>
       </div>
 
-      {/* Tasks — shown as labels (no completing here) */}
-      {/* Tasks + admin controls */}
-      <div className="px-3.5 pb-2">
+      {/* Task chips + admin controls */}
+      <div className="px-3 pb-2">
         {tasks.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
+          <div className="flex flex-wrap gap-1.5 mb-2">
             {tasks.map(t => (
-              <span key={t.id} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-dark-700/50 px-3 py-1 text-xs text-gray-200">
+              <span key={t.id}
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-dark-700/50 px-2.5 py-1 text-xs text-gray-200">
                 {t.title}
                 {isAdmin && (
-                  <button onClick={() => onDeleteTask(lead.id, t.id)} className="text-gray-500 hover:text-red-400"><Trash2 size={11} /></button>
+                  <button onClick={() => onDeleteTask(lead.id, t.id)} className="text-gray-500 hover:text-red-400 flex-shrink-0">
+                    <Trash2 size={10} />
+                  </button>
                 )}
               </span>
             ))}
           </div>
         )}
 
-        {/* Admin: add a task to this lead */}
+        {/* Admin add-task */}
         {isAdmin && (
           adding ? (
             <div className="flex gap-2">
-              <input
-                autoFocus
-                type="text"
-                value={newTask}
+              <input autoFocus type="text" value={newTask}
                 onChange={e => setNewTask(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
-                placeholder="Task for this lead…"
-                className="input-field text-sm flex-1"
-              />
-              <button onClick={submitAdd} disabled={savingAdd || !newTask.trim()} className="btn-primary px-3 text-sm disabled:opacity-50">
-                {savingAdd ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
+                placeholder="Task name…"
+                className="input-field text-sm flex-1 min-w-0" />
+              <button onClick={submitAdd} disabled={savingAdd || !newTask.trim()}
+                className="btn-primary px-3 text-sm flex-shrink-0 disabled:opacity-50">
+                {savingAdd ? <Loader2 size={13} className="animate-spin" /> : 'Add'}
               </button>
-              <button onClick={() => { setAdding(false); setNewTask(''); }} className="px-2 text-sm text-gray-400 hover:text-gray-200">✕</button>
+              <button onClick={() => { setAdding(false); setNewTask(''); }}
+                className="px-2 text-sm text-gray-400 flex-shrink-0">✕</button>
             </div>
           ) : (
-            <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-xs text-brand-300 hover:text-brand-200">
-              <Plus size={13} /> Add task
+            <button onClick={() => setAdding(true)}
+              className="inline-flex items-center gap-1 text-xs text-brand-300 hover:text-brand-200">
+              <Plus size={12} /> Add task
             </button>
           )
         )}
       </div>
 
-      {/* Claim button — full-width at bottom of card */}
+      {/* Claim / Claimed */}
       {tasks.length > 0 && (
         allClaimed ? (
-          <div className="w-full bg-dark-700/60 text-gray-400 text-sm font-semibold py-2.5 flex items-center justify-center gap-2">
-            <Check size={15} className="text-green-400" />
+          <div className="w-full bg-dark-700/60 text-gray-400 text-xs font-semibold py-2.5 flex items-center justify-center gap-1.5">
+            <Check size={14} className="text-green-400" />
             Claimed{claimant ? ` by ${claimant}` : ''}
           </div>
         ) : (
-          <button
-            onClick={() => onClaim(lead.id)}
-            disabled={claiming || !claimable}
-            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-2.5 flex items-center justify-center gap-2 transition-colors"
-          >
+          <button onClick={() => onClaim(lead.id)} disabled={claiming || !claimable}
+            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-2.5 flex items-center justify-center gap-2 transition-colors">
             {claiming ? <Loader2 size={15} className="animate-spin" /> : <Hand size={15} />}
-            {claiming ? 'Claiming...' : (tasks.length > 1 ? 'Claim Tasks' : 'Claim Task')}
+            {claiming ? 'Claiming…' : tasks.length > 1 ? 'Claim Tasks' : 'Claim Task'}
           </button>
         )
       )}
