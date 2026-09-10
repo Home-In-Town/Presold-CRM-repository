@@ -316,4 +316,44 @@ router.delete('/media/:id', authenticate, authorize('ADMIN'), async (req, res) =
   }
 });
 
+// POST /journey/steps/reset-defaults — admin deletes all COMMON steps and
+// re-seeds the default 3 (Connect, Reply, Interest). Useful when an existing
+// database has the old 20-step list.
+router.post('/steps/reset-defaults', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const DEFAULT_STEPS = [
+      { key: 'connect',  label: 'Connect',  order: 1, type: 'text', category: 'COMMON' },
+      { key: 'reply',    label: 'Reply',    order: 2, type: 'text', category: 'COMMON' },
+      { key: 'interest', label: 'Interest', order: 3, type: 'text', category: 'COMMON' }
+    ];
+
+    // Delete progress and steps for every COMMON step NOT in the default 3.
+    const keepKeys = DEFAULT_STEPS.map(s => s.key);
+    const toDelete = await prisma.journeyStep.findMany({
+      where: { category: 'COMMON', key: { notIn: keepKeys } }
+    });
+    for (const step of toDelete) {
+      await prisma.journeyProgress.deleteMany({ where: { stepId: step.id } });
+      await prisma.journeyStep.delete({ where: { id: step.id } });
+    }
+
+    // Upsert the 3 default steps so they always exist with the right labels/order.
+    for (const s of DEFAULT_STEPS) {
+      await prisma.journeyStep.upsert({
+        where: { key: s.key },
+        update: { label: s.label, order: s.order, category: 'COMMON' },
+        create: s
+      });
+    }
+
+    const steps = await prisma.journeyStep.findMany({
+      where: { category: 'COMMON' }, orderBy: { order: 'asc' }
+    });
+    res.json({ message: 'Journey reset to defaults', steps });
+  } catch (err) {
+    console.error('Reset journey error:', err);
+    res.status(500).json({ error: 'Failed to reset journey steps' });
+  }
+});
+
 export default router;
