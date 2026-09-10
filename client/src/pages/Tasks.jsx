@@ -596,7 +596,7 @@ export default function Tasks() {
   const showLeads = tab === 'all';
 
   return (
-    <div className="space-y-8 max-w-2xl mx-auto pb-10">
+    <div className="space-y-4 w-full max-w-2xl mx-auto pb-10 overflow-x-hidden">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Tasks</h1>
         {isAdmin && (
@@ -702,11 +702,11 @@ export default function Tasks() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-2">
             <select
               value={form.priority}
               onChange={e => setForm({ ...form, priority: e.target.value })}
-              className="input-field text-sm sm:w-40"
+              className="input-field text-sm"
             >
               <option value="HIGH">High priority</option>
               <option value="MEDIUM">Medium priority</option>
@@ -717,7 +717,7 @@ export default function Tasks() {
               value={form.locationLink}
               onChange={e => setForm({ ...form, locationLink: e.target.value })}
               placeholder="Paste Google Maps location link"
-              className="input-field text-sm flex-1"
+              className="input-field text-sm w-full"
             />
           </div>
 
@@ -752,9 +752,9 @@ export default function Tasks() {
       )}
 
       {/* ---------------- Team Task Pool ---------------- */}
-      <section className="space-y-3">
+      <section className="space-y-3 w-full">
         {/* Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {TABS.map(t => {
             const Icon = t.icon;
             const active = tab === t.key;
@@ -762,13 +762,14 @@ export default function Tasks() {
               <button
                 key={t.key}
                 onClick={() => setTab(active ? 'all' : t.key)}
-                className={`flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[11px] sm:text-xs font-semibold transition-colors ${
+                className={`flex items-center justify-center gap-1 rounded-xl border px-1.5 py-2.5 text-[10px] sm:text-xs font-semibold transition-colors min-w-0 ${
                   active
                     ? 'border-brand-500 bg-brand-600/15 text-brand-200'
                     : 'border-white/8 bg-dark-700/40 text-gray-400 hover:text-gray-200'
                 }`}
               >
-                <Icon size={13} /> {t.label}
+                <Icon size={13} className="flex-shrink-0" />
+                <span className="truncate">{t.label}</span>
               </button>
             );
           })}
