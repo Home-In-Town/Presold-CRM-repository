@@ -230,7 +230,14 @@ router.get('/leads', authenticate, async (req, res) => {
         temperature: true,
         createdAt: true,
         assignedTo: { select: { id: true, name: true, avatar: true } },
-        tasks: { select: leadTaskSelect, orderBy: [{ completed: 'asc' }, { createdAt: 'asc' }] }
+        tasks: { select: leadTaskSelect, orderBy: [{ completed: 'asc' }, { createdAt: 'asc' }] },
+        // First uploaded image, used as the photo on the task card.
+        files: {
+          where: { mimeType: { startsWith: 'image/' }, deletedAt: { isSet: false } },
+          select: { url: true },
+          orderBy: { createdAt: 'asc' },
+          take: 1
+        }
       }
     });
 

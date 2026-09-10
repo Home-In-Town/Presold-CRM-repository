@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Phone, Building2, MapPin, Upload,
   Check, MessageCircle, FileText, Image, Video, Send,
-  ChevronDown, ChevronRight, Camera, Plus, Minus, X, Loader2
+  ChevronDown, ChevronRight, Plus, X, Loader2
 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -45,12 +45,9 @@ export default function LeadDetail() {
   const [newStageLabel, setNewStageLabel] = useState('');
   const [savingStage, setSavingStage]   = useState(false);
 
-  // Journey (COMMON only, admin add/remove)
+  // Journey (COMMON only, synced with pipeline stages)
   const [journeySteps, setJourneySteps]   = useState([]);
   const [expandedStepId, setExpandedStepId] = useState(null);
-  const [addingStep, setAddingStep]         = useState(false);
-  const [newStepLabel, setNewStepLabel]     = useState('');
-  const [savingStep, setSavingStep]         = useState(false);
   const [resettingJourney, setResettingJourney] = useState(false);
 
   useEffect(() => {
@@ -108,6 +105,8 @@ export default function LeadDetail() {
     try {
       const res = await api.post('/settings/pipeline-stages', { label });
       setStages(res.data);
+      // Journey step is automatically added server-side.
+      await loadJourney();
       setNewStageLabel('');
       setAddingStage(false);
       toast.success(`Stage "${label}" added`);
@@ -121,6 +120,8 @@ export default function LeadDetail() {
     try {
       const res = await api.delete(`/settings/pipeline-stages/${key}`);
       setStages(res.data);
+      // Journey step is automatically removed server-side.
+      await loadJourney();
       toast.success('Stage removed');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to remove stage');
@@ -145,41 +146,14 @@ export default function LeadDetail() {
     }
   };
 
-  const addStep = async () => {
-    const label = newStepLabel.trim();
-    if (!label) return;
-    setSavingStep(true);
-    try {
-      await api.post('/journey/steps/add', { label, category: 'COMMON' });
-      await loadJourney();
-      setNewStepLabel('');
-      setAddingStep(false);
-      toast.success(`Step "${label}" added`);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to add step');
-    }
-    setSavingStep(false);
-  };
-
-  const removeStep = async (step) => {
-    if (!confirm(`Remove step "${step.label}"? This will delete all progress for this step.`)) return;
-    try {
-      await api.delete(`/journey/steps/${step.id}`);
-      await loadJourney();
-      toast.success(`Step "${step.label}" removed`);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to remove step');
-    }
-  };
-
   const resetJourneyDefaults = async () => {
-    if (!confirm('Reset journey to the 3 default steps (Connect, Reply, Interest)? Extra steps and their progress will be deleted.')) return;
+    if (!confirm('Sync journey steps to match the current pipeline stages exactly?')) return;
     setResettingJourney(true);
     try {
-      await api.post('/journey/steps/reset-defaults');
+      await api.post('/settings/pipeline-stages/sync');
       await loadJourney();
-      toast.success('Journey reset to defaults');
-    } catch { toast.error('Reset failed'); }
+      toast.success('Journey synced to pipeline stages');
+    } catch { toast.error('Sync failed'); }
     setResettingJourney(false);
   };
 
@@ -318,24 +292,15 @@ export default function LeadDetail() {
             <span className="text-[11px] text-brand-400 font-medium">{completedCount}/{journeySteps.length} · {progress}%</span>
           </div>
           {isAdmin && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setAddingStep(v => !v)}
-                className="text-[11px] text-brand-300 hover:text-brand-200 flex items-center gap-1"
-              >
-                {addingStep ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add</>}
-              </button>
-              {journeySteps.length > 3 && (
-                <button
-                  onClick={resetJourneyDefaults}
-                  disabled={resettingJourney}
-                  className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                >
-                  {resettingJourney ? <Loader2 size={12} className="animate-spin" /> : null}
-                  Reset
-                </button>
-              )}
-            </div>
+            <button
+              onClick={resetJourneyDefaults}
+              disabled={resettingJourney}
+              className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1"
+              title="Sync journey steps to match pipeline stages"
+            >
+              {resettingJourney ? <Loader2 size={12} className="animate-spin" /> : null}
+              Sync with stages
+            </button>
           )}
         </div>
 
@@ -350,7 +315,7 @@ export default function LeadDetail() {
         {/* Steps */}
         <div className="space-y-2">
           {journeySteps.length === 0 && (
-            <p className="text-xs text-gray-600 py-3 text-center">No steps yet.{isAdmin ? ' Click + to add one.' : ''}</p>
+            <p className="text-xs text-gray-600 py-3 text-center">No journey steps. Add pipeline stages to populate.</p>
           )}
           {journeySteps.map((step, i) => {
             const prevStep = journeySteps.find(s => s.order === step.order - 1);
@@ -393,16 +358,6 @@ export default function LeadDetail() {
                       {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </span>
                   )}
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={e => { e.stopPropagation(); removeStep(step); }}
-                      className="w-5 h-5 flex items-center justify-center rounded bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                      title={`Remove "${step.label}"`}
-                    >
-                      <Minus size={10} strokeWidth={3} />
-                    </button>
-                  )}
                   {isLocked && <span className="text-[9px] text-gray-500 uppercase">Locked</span>}
                 </div>
 
@@ -429,23 +384,6 @@ export default function LeadDetail() {
           })}
         </div>
 
-        {/* Add step input */}
-        {isAdmin && addingStep && (
-          <div className="flex gap-2 mt-3">
-            <input
-              autoFocus
-              type="text"
-              value={newStepLabel}
-              onChange={e => setNewStepLabel(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addStep(); } }}
-              placeholder="Step name (e.g. Site visit)"
-              className="input-field text-sm flex-1"
-            />
-            <button onClick={addStep} disabled={savingStep || !newStepLabel.trim()} className="btn-primary px-3 text-sm disabled:opacity-50">
-              {savingStep ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ── Lead Details ── */}

@@ -33,6 +33,7 @@ router.put('/', authenticate, authorize('ADMIN','MANAGER','SALES_EXECUTIVE'), as
 
 // ─── Pipeline stages (admin-editable) ───────────────────────────────────────
 // Stored as a JSON array of { key, label } under the setting key "pipelineStages".
+// Journey steps (COMMON category) are automatically kept in sync with stages.
 const DEFAULT_STAGES = [
   { key: 'CONNECT', label: 'Connect' },
   { key: 'REPLY', label: 'Reply' },
@@ -41,6 +42,9 @@ const DEFAULT_STAGES = [
 
 const slugKey = (label) =>
   String(label).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+const jKey = (label) =>
+  String(label).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
 async function readStages() {
   const setting = await prisma.setting.findUnique({ where: { key: 'pipelineStages' } });
@@ -64,6 +68,35 @@ async function writeStages(stages) {
   });
 }
 
+// Keep journey steps (COMMON) in sync with the provided stage list.
+// Removes steps whose labels no longer exist in stages, upserts the rest.
+async function syncJourneySteps(stages) {
+  const existingSteps = await prisma.journeyStep.findMany({ where: { category: 'COMMON' }, orderBy: { order: 'asc' } });
+
+  // Delete journey steps that no longer match any stage.
+  const stageLabels = stages.map(s => s.label.toLowerCase().trim());
+  for (const step of existingSteps) {
+    if (!stageLabels.includes(step.label.toLowerCase().trim())) {
+      await prisma.journeyProgress.deleteMany({ where: { stepId: step.id } });
+      await prisma.journeyStep.delete({ where: { id: step.id } });
+    }
+  }
+
+  // Upsert a step for every stage (correct order).
+  const fresh = await prisma.journeyStep.findMany({ where: { category: 'COMMON' } });
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i];
+    const existing = fresh.find(s => s.label.toLowerCase().trim() === stage.label.toLowerCase().trim());
+    if (existing) {
+      await prisma.journeyStep.update({ where: { id: existing.id }, data: { order: i + 1 } });
+    } else {
+      await prisma.journeyStep.create({
+        data: { key: jKey(stage.label), label: stage.label, order: i + 1, type: 'text', category: 'COMMON' }
+      });
+    }
+  }
+}
+
 // GET pipeline stages — any authenticated user.
 router.get('/pipeline-stages', authenticate, async (req, res) => {
   try {
@@ -73,7 +106,7 @@ router.get('/pipeline-stages', authenticate, async (req, res) => {
   }
 });
 
-// Add a stage (admin).
+// Add a stage (admin) — also adds a matching journey step.
 router.post('/pipeline-stages', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
     const label = (req.body?.label || '').trim();
@@ -86,13 +119,15 @@ router.post('/pipeline-stages', authenticate, authorize('ADMIN'), async (req, re
     }
     const updated = [...stages, { key, label }];
     await writeStages(updated);
+    await syncJourneySteps(updated);
     res.status(201).json(updated);
   } catch (err) {
+    console.error('Add stage error:', err);
     res.status(500).json({ error: 'Failed to add stage' });
   }
 });
 
-// Remove a stage by key (admin).
+// Remove a stage by key (admin) — also removes the matching journey step.
 router.delete('/pipeline-stages/:key', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
     const stages = await readStages();
@@ -101,9 +136,23 @@ router.delete('/pipeline-stages/:key', authenticate, authorize('ADMIN'), async (
       return res.status(400).json({ error: 'At least one stage must remain' });
     }
     await writeStages(updated);
+    await syncJourneySteps(updated);
     res.json(updated);
   } catch (err) {
+    console.error('Remove stage error:', err);
     res.status(500).json({ error: 'Failed to remove stage' });
+  }
+});
+
+// Force-sync journey steps to match current pipeline stages (admin utility).
+router.post('/pipeline-stages/sync', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const stages = await readStages();
+    await syncJourneySteps(stages);
+    const steps = await prisma.journeyStep.findMany({ where: { category: 'COMMON' }, orderBy: { order: 'asc' } });
+    res.json({ stages, steps });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to sync' });
   }
 });
 

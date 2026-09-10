@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Filter, Phone, Mail, Building2, MapPin,
-  MoreHorizontal, Trash2, Edit, Eye, X, ChevronDown
+  MoreHorizontal, Trash2, Edit, Eye, X, ChevronDown, Camera
 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -284,13 +284,29 @@ export default function Leads() {
 function AddLeadModal({ onClose, onAdded }) {
   const [form, setForm] = useState({ fullName: '', phone: '', email: '', company: '', location: '', locationLink: '', budget: '', source: 'INSTAGRAM_DM', leadType: 'INDIVIDUAL', temperature: 'WARM', priority: 'MEDIUM', adsRunning: false, notes: '' });
   const [loading, setLoading] = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+
+  const onPhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.fullName || !form.phone) { toast.error('Name and phone required'); return; }
     setLoading(true);
     try {
-      await api.post('/leads', form);
+      const res = await api.post('/leads', form);
+      const leadId = res.data?.id;
+      // Upload photo if provided, linked to the newly created lead.
+      if (leadId && photoFile) {
+        const fd = new FormData();
+        fd.append('file', photoFile);
+        await api.post(`/uploads/lead/${leadId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
       toast.success('+5 XP — Lead added! 🎯');
       onAdded();
     } catch (err) {
@@ -348,6 +364,25 @@ function AddLeadModal({ onClose, onAdded }) {
             </span>
           </label>
           <textarea placeholder="Notes (optional)" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="input-field text-sm resize-none h-20" />
+
+          {/* Photo upload — shown on the lead's task card */}
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-white/10 bg-dark-700/40 px-3 py-2 text-xs text-gray-300 hover:bg-dark-700/70 transition-colors">
+              <Camera size={14} className="text-brand-400" />
+              {photoFile ? 'Change photo' : 'Add lead photo'}
+              <input type="file" accept="image/*" className="hidden" onChange={onPhotoChange} />
+            </label>
+            {photoPreview && (
+              <div className="relative">
+                <img src={photoPreview} alt="preview" className="w-12 h-12 rounded-lg object-cover border border-white/10" />
+                <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(''); }}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white">
+                  <X size={9} />
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button type="submit" disabled={loading} className="btn-primary flex-1 text-sm">{loading ? 'Adding...' : 'Add Lead (+5 XP)'}</button>
             <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
