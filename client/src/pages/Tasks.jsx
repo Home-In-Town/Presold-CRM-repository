@@ -14,7 +14,6 @@ const PRIORITY_STYLES = {
   LOW: 'bg-sky-500/10 text-sky-300 border-sky-500/20'
 };
 
-// Predefined task types an admin can assign to an opportunity.
 const TASK_OPTIONS = [
   'Site visit',
   'Property demo call',
@@ -30,7 +29,6 @@ const TASK_OPTIONS = [
 
 const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
-// Haversine great-circle distance in kilometres.
 function distanceKm(lat1, lon1, lat2, lon2) {
   const toRad = d => (d * Math.PI) / 180;
   const R = 6371;
@@ -51,14 +49,14 @@ function formatDistance(km) {
 function PriorityBadge({ priority }) {
   const p = (priority || 'MEDIUM').toUpperCase();
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${PRIORITY_STYLES[p] || PRIORITY_STYLES.MEDIUM}`}>
-      <Flag size={9} /> {p}
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${PRIORITY_STYLES[p] || PRIORITY_STYLES.MEDIUM}`}>
+      <Flag size={8} /> {p}
     </span>
   );
 }
 
-// One opportunity (project) card — mobile-first layout.
-function OpportunityCard({ opp, userPos, onClaim, claiming, initiated, canDelete, onDelete }) {
+// Opportunity card — compact mobile-first
+function OpportunityCard({ opp, userPos, onClaim, claiming, canDelete, onDelete }) {
   const dist = useMemo(() => {
     if (!userPos || opp.latitude == null || opp.longitude == null) return null;
     return distanceKm(userPos.lat, userPos.lng, opp.latitude, opp.longitude);
@@ -67,59 +65,56 @@ function OpportunityCard({ opp, userPos, onClaim, claiming, initiated, canDelete
   const tasks = opp.tasks || [];
   const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
   const claimant = tasks.find(t => t.user?.name)?.user?.name || null;
-  const locationText = opp.address || null;
 
   return (
-    <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-hidden w-full">
-      {/* Photo + details row */}
-      <div className="flex gap-2.5 p-3">
-        {/* Photo */}
-        <div className="relative w-16 h-16 rounded-xl bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
+    <div className="glass-card overflow-hidden w-full">
+      {/* Header row */}
+      <div className="flex gap-2 p-2.5">
+        {/* Thumbnail */}
+        <div className="relative w-12 h-12 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
           {opp.photoUrl
             ? <img src={resolveFileUrl(opp.photoUrl)} alt={opp.projectName} className="w-full h-full object-cover" />
-            : <ImageIcon size={20} className="text-gray-600" />}
-          <span className={`absolute top-1 left-0 text-white text-[7px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r-md shadow leading-none ${opp.type === 'lead' ? 'bg-emerald-600' : 'bg-brand-600'}`}>
+            : <ImageIcon size={16} className="text-gray-600" />}
+          <span className={`absolute top-0.5 left-0 text-white text-[6px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r shadow leading-none ${opp.type === 'lead' ? 'bg-emerald-600' : 'bg-brand-600'}`}>
             {opp.type === 'lead' ? 'Lead' : 'Opp'}
           </span>
         </div>
 
-        {/* Details */}
+        {/* Info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-1">
-            <p className="text-sm font-bold text-white leading-tight break-words min-w-0 flex-1">{opp.projectName}</p>
+          <div className="flex items-start gap-1">
+            <p className="text-xs font-bold text-white leading-snug break-words flex-1 min-w-0">{opp.projectName}</p>
             {canDelete && (
-              <button onClick={() => onDelete(opp)} className="p-1 flex-shrink-0 text-gray-600 hover:text-red-400">
-                <Trash2 size={13} />
+              <button onClick={() => onDelete(opp)} className="p-0.5 flex-shrink-0 text-gray-600 hover:text-red-400 mt-0.5">
+                <Trash2 size={12} />
               </button>
             )}
           </div>
-          {locationText && (
-            <p className="text-xs text-gray-400 mt-0.5 truncate">{locationText}</p>
-          )}
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1">
+          {opp.address && <p className="text-[11px] text-gray-400 truncate mt-0.5">{opp.address}</p>}
+          <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1 mt-1">
             <PriorityBadge priority={opp.priority} />
             {dist != null && (
-              <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-300">
-                <Navigation size={11} /> {formatDistance(dist)}
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-brand-300">
+                <Navigation size={10} /> {formatDistance(dist)}
               </span>
             )}
             {opp.locationLink && (
               <a href={opp.locationLink} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-0.5 text-[11px] text-brand-300 hover:text-brand-200">
-                <MapPin size={11} /> View
+                className="inline-flex items-center gap-0.5 text-[10px] text-brand-300 hover:text-brand-200">
+                <MapPin size={10} /> View
               </a>
             )}
           </div>
         </div>
       </div>
 
-      {/* Task chips — horizontal scroll inside the card */}
+      {/* Task chips — scrollable */}
       {tasks.length > 0 && (
-        <div className="px-3 pb-2 overflow-x-auto custom-scroll">
-          <div className="flex gap-1.5 w-max">
+        <div className="px-2.5 pb-2 overflow-x-auto custom-scroll">
+          <div className="flex gap-1 w-max">
             {tasks.map(t => (
               <span key={t.id}
-                className="flex-shrink-0 rounded-full border border-white/10 bg-dark-700/50 px-2.5 py-0.5 text-[11px] text-gray-200 whitespace-nowrap">
+                className="flex-shrink-0 rounded-full border border-white/10 bg-dark-700/50 px-2 py-0.5 text-[10px] text-gray-200 whitespace-nowrap">
                 {t.title}
               </span>
             ))}
@@ -127,24 +122,24 @@ function OpportunityCard({ opp, userPos, onClaim, claiming, initiated, canDelete
         </div>
       )}
 
-      {/* Claim / Claimed */}
+      {/* Footer */}
       {allClaimed ? (
-        <div className="w-full bg-dark-700/60 text-gray-400 text-xs font-semibold py-2.5 flex items-center justify-center gap-1.5">
-          <Check size={14} className="text-green-400" />
+        <div className="w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-2 flex items-center justify-center gap-1.5">
+          <Check size={12} className="text-green-400" />
           Claimed{claimant ? ` by ${claimant}` : ''}
         </div>
       ) : (
         <button onClick={() => onClaim(opp)} disabled={claiming}
-          className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-2.5 flex items-center justify-center gap-2 transition-colors">
-          {claiming ? <Loader2 size={15} className="animate-spin" /> : <Hand size={15} />}
+          className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 transition-colors">
+          {claiming ? <Loader2 size={13} className="animate-spin" /> : <Hand size={13} />}
           {claiming ? 'Claiming…' : tasks.length > 1 ? 'Claim Tasks' : 'Claim Task'}
         </button>
       )}
-    </motion.div>
+    </div>
   );
 }
 
-// Lead card — mobile-first, no horizontal overflow.
+// Lead card — compact mobile-first
 function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, claiming }) {
   const [adding, setAdding] = useState(false);
   const [newTask, setNewTask] = useState('');
@@ -172,38 +167,38 @@ function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, c
   };
 
   return (
-    <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card overflow-hidden w-full">
-      {/* Photo + details row */}
-      <div className="flex gap-2.5 p-3">
-        {/* Photo / initial */}
-        <div className="relative w-16 h-16 rounded-xl bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
+    <div className="glass-card overflow-hidden w-full">
+      {/* Header row */}
+      <div className="flex gap-2 p-2.5">
+        {/* Avatar */}
+        <div className="relative w-12 h-12 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
           {photoUrl
             ? <img src={photoUrl} alt={lead.fullName} className="w-full h-full object-cover" />
-            : <span className="text-xl font-bold text-brand-400/60">{lead.fullName[0]}</span>}
-          <span className="absolute top-1 left-0 bg-emerald-600 text-white text-[7px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r-md shadow leading-none">
+            : <span className="text-base font-bold text-brand-400/60">{lead.fullName[0]}</span>}
+          <span className="absolute top-0.5 left-0 bg-emerald-600 text-white text-[6px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r shadow leading-none">
             Lead
           </span>
         </div>
 
-        {/* Details */}
+        {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-white break-words leading-tight">{lead.fullName}</p>
+          <p className="text-xs font-bold text-white leading-snug break-words">{lead.fullName}</p>
           {(lead.company || lead.location) && (
-            <p className="text-xs text-gray-400 truncate mt-0.5">
+            <p className="text-[11px] text-gray-400 truncate mt-0.5">
               {[lead.company, lead.location].filter(Boolean).join(' · ')}
             </p>
           )}
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1">
+          <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1 mt-1">
             <PriorityBadge priority={lead.priority} />
             {dist != null && (
-              <span className="inline-flex items-center gap-0.5 text-[11px] text-gray-300">
-                <Navigation size={11} /> {formatDistance(dist)}
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-300">
+                <Navigation size={10} /> {formatDistance(dist)}
               </span>
             )}
             {lead.locationLink && (
               <a href={lead.locationLink} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-0.5 text-[11px] text-brand-300 hover:text-brand-200">
-                <MapPin size={11} /> View
+                className="inline-flex items-center gap-0.5 text-[10px] text-brand-300 hover:text-brand-200">
+                <MapPin size={10} /> View
               </a>
             )}
           </div>
@@ -211,16 +206,16 @@ function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, c
       </div>
 
       {/* Task chips + admin controls */}
-      <div className="px-3 pb-2">
+      <div className="px-2.5 pb-2">
         {tasks.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2">
+          <div className="flex flex-wrap gap-1 mb-2">
             {tasks.map(t => (
               <span key={t.id}
-                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-dark-700/50 px-2.5 py-1 text-xs text-gray-200">
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-dark-700/50 px-2 py-0.5 text-[10px] text-gray-200">
                 {t.title}
                 {isAdmin && (
                   <button onClick={() => onDeleteTask(lead.id, t.id)} className="text-gray-500 hover:text-red-400 flex-shrink-0">
-                    <Trash2 size={10} />
+                    <Trash2 size={9} />
                   </button>
                 )}
               </span>
@@ -228,47 +223,50 @@ function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, c
           </div>
         )}
 
-        {/* Admin add-task */}
         {isAdmin && (
           adding ? (
-            <div className="flex gap-2">
-              <input autoFocus type="text" value={newTask}
+            <div className="flex gap-1.5">
+              <input
+                autoFocus
+                type="text"
+                value={newTask}
                 onChange={e => setNewTask(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
                 placeholder="Task name…"
-                className="input-field text-sm flex-1 min-w-0" />
+                className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
+              />
               <button onClick={submitAdd} disabled={savingAdd || !newTask.trim()}
-                className="btn-primary px-3 text-sm flex-shrink-0 disabled:opacity-50">
-                {savingAdd ? <Loader2 size={13} className="animate-spin" /> : 'Add'}
+                className="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0">
+                {savingAdd ? <Loader2 size={11} className="animate-spin" /> : 'Add'}
               </button>
               <button onClick={() => { setAdding(false); setNewTask(''); }}
-                className="px-2 text-sm text-gray-400 flex-shrink-0">✕</button>
+                className="px-1.5 text-xs text-gray-400 flex-shrink-0">✕</button>
             </div>
           ) : (
             <button onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1 text-xs text-brand-300 hover:text-brand-200">
-              <Plus size={12} /> Add task
+              className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200">
+              <Plus size={11} /> Add task
             </button>
           )
         )}
       </div>
 
-      {/* Claim / Claimed */}
+      {/* Footer */}
       {tasks.length > 0 && (
         allClaimed ? (
-          <div className="w-full bg-dark-700/60 text-gray-400 text-xs font-semibold py-2.5 flex items-center justify-center gap-1.5">
-            <Check size={14} className="text-green-400" />
+          <div className="w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-2 flex items-center justify-center gap-1.5">
+            <Check size={12} className="text-green-400" />
             Claimed{claimant ? ` by ${claimant}` : ''}
           </div>
         ) : (
           <button onClick={() => onClaim(lead.id)} disabled={claiming || !claimable}
-            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-2.5 flex items-center justify-center gap-2 transition-colors">
-            {claiming ? <Loader2 size={15} className="animate-spin" /> : <Hand size={15} />}
+            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 transition-colors">
+            {claiming ? <Loader2 size={13} className="animate-spin" /> : <Hand size={13} />}
             {claiming ? 'Claiming…' : tasks.length > 1 ? 'Claim Tasks' : 'Claim Task'}
           </button>
         )
       )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -276,27 +274,23 @@ export default function Tasks() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
 
-  // Pool state
-  const [tab, setTab] = useState('all'); // 'all' | 'priority' | 'nearby' | 'initiated' | 'leads'
+  const [tab, setTab] = useState('all');
   const [openPool, setOpenPool] = useState([]);
   const [initiatedPool, setInitiatedPool] = useState([]);
   const [claimingId, setClaimingId] = useState(null);
 
-  // Leads (visible to everyone inside the Tasks section)
   const [leads, setLeads] = useState([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
 
-  // User geolocation
   const [userPos, setUserPos] = useState(null);
-  const [geoStatus, setGeoStatus] = useState('idle'); // idle | locating | ready | denied | unsupported
+  const [geoStatus, setGeoStatus] = useState('idle');
 
-  // Admin create-to-pool form
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ projectName: '', address: '', priority: 'MEDIUM', locationLink: '' });
-  const [selectedTasks, setSelectedTasks] = useState([]); // predefined tasks chosen
-  const [customTasks, setCustomTasks] = useState([]);      // one or more custom tasks
-  const [customInput, setCustomInput] = useState('');      // the custom task being typed
+  const [selectedTasks, setSelectedTasks] = useState([]);
+  const [customTasks, setCustomTasks] = useState([]);
+  const [customInput, setCustomInput] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -308,7 +302,6 @@ export default function Tasks() {
     requestLocation();
   }, []);
 
-  // Refresh leads whenever the default (leads) view is opened.
   useEffect(() => {
     if (tab === 'all') loadLeads();
   }, [tab]);
@@ -318,19 +311,14 @@ export default function Tasks() {
     try {
       const res = await api.get('/tasks/leads');
       setLeads(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load leads');
     }
     setLeadsLoading(false);
   };
 
-  // Sort leads so those WITH tasks are on top, and those without tasks sink to
-  // the bottom. Within each group, newest first.
   const resortLeads = (list) => {
-    const withState = list.map(l => {
-      const total = l.tasks?.length || 0;
-      return { ...l, taskTotal: total, hasTasks: total > 0 };
-    });
+    const withState = list.map(l => ({ ...l, hasTasks: (l.tasks?.length || 0) > 0 }));
     return withState.sort((a, b) => {
       if (a.hasTasks !== b.hasTasks) return a.hasTasks ? -1 : 1;
       return new Date(b.createdAt) - new Date(a.createdAt);
@@ -340,22 +328,19 @@ export default function Tasks() {
   const addLeadTasks = async (leadId, titles) => {
     try {
       const res = await api.post(`/tasks/lead/${leadId}`, { titles });
-      setLeads(prev => resortLeads(prev.map(l =>
-        l.id === leadId ? { ...l, tasks: res.data.tasks } : l
-      )));
+      setLeads(prev => resortLeads(prev.map(l => l.id === leadId ? { ...l, tasks: res.data.tasks } : l)));
       toast.success('Task added to lead');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to add task');
     }
   };
 
-  // Claim all of a lead's tasks straight from the leads view.
   const claimLead = async (leadId) => {
     setClaimingId(leadId);
     try {
       const res = await api.post(`/tasks/lead/${leadId}/claim`);
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, tasks: res.data.tasks } : l));
-      loadPool(); // reflect in the Initiated tab
+      loadPool();
       toast.success('Lead claimed 🙌');
     } catch (err) {
       if (err.response?.status === 409) {
@@ -404,7 +389,6 @@ export default function Tasks() {
     } catch {}
   };
 
-  // ---- Admin: create pooled opportunity ----
   const onPhotoChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -412,29 +396,21 @@ export default function Tasks() {
     setPhotoPreview(URL.createObjectURL(file));
   };
 
-  const toggleTaskOption = (opt) => {
-    setSelectedTasks(prev =>
-      prev.includes(opt) ? prev.filter(t => t !== opt) : [...prev, opt]
-    );
-  };
+  const toggleTaskOption = (opt) =>
+    setSelectedTasks(prev => prev.includes(opt) ? prev.filter(t => t !== opt) : [...prev, opt]);
 
-  // Add the currently-typed custom task to the list (supports multiple).
   const addCustomTask = () => {
     const val = customInput.trim();
     if (!val) return;
-    setCustomTasks(prev => (prev.includes(val) ? prev : [...prev, val]));
+    setCustomTasks(prev => prev.includes(val) ? prev : [...prev, val]);
     setCustomInput('');
   };
 
-  const removeCustomTask = (val) => {
-    setCustomTasks(prev => prev.filter(t => t !== val));
-  };
+  const removeCustomTask = (val) => setCustomTasks(prev => prev.filter(t => t !== val));
 
   const submitPoolTask = async (e) => {
     e.preventDefault();
     if (!form.projectName.trim()) { toast.error('Project / site name is required'); return; }
-
-    // Combine predefined selections + all custom tasks (+ any unsubmitted text).
     const titles = [...selectedTasks, ...customTasks];
     if (customInput.trim() && !titles.includes(customInput.trim())) titles.push(customInput.trim());
     if (titles.length === 0) { toast.error('Pick at least one task or type a custom one'); return; }
@@ -442,8 +418,6 @@ export default function Tasks() {
     setSubmitting(true);
     try {
       const hadLink = !!form.locationLink.trim();
-
-      // One request creates the project (opportunity) plus all of its tasks.
       const fd = new FormData();
       fd.append('projectName', form.projectName.trim());
       if (form.address.trim()) fd.append('address', form.address.trim());
@@ -468,7 +442,7 @@ export default function Tasks() {
       const n = opp.tasks?.length || 0;
       toast.success(n === 1 ? 'Opportunity added to pool' : `Project added with ${n} tasks`);
       if (hadLink && (opp.latitude == null || opp.longitude == null)) {
-        toast('Couldn\'t read coordinates from that maps link, so distance won\'t show. Tip: open the location in Google Maps and copy the full URL (it contains "@lat,lng").', { icon: '📍', duration: 7000 });
+        toast('Couldn\'t read coordinates from that link — distance won\'t show.', { icon: '📍', duration: 6000 });
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to add opportunity');
@@ -476,8 +450,6 @@ export default function Tasks() {
     setSubmitting(false);
   };
 
-  // ---- Pool actions ----
-  // Claim a whole card (opportunity or lead) — all its tasks go to the user.
   const claimProject = async (card) => {
     setClaimingId(card.id);
     const url = card.type === 'lead'
@@ -498,8 +470,6 @@ export default function Tasks() {
     setClaimingId(null);
   };
 
-  // Delete a card. Opportunities are deleted; for leads we remove their pooled
-  // tasks (the lead itself is not deleted from the CRM).
   const deleteCard = async (card) => {
     try {
       if (card.type === 'lead') {
@@ -515,7 +485,6 @@ export default function Tasks() {
     } catch { toast.error('Failed to delete'); }
   };
 
-  // ---- Derived lists per tab ----
   const withDistance = (list) => list.map(o => {
     const d = (userPos && o.latitude != null && o.longitude != null)
       ? distanceKm(userPos.lat, userPos.lng, o.latitude, o.longitude)
@@ -533,207 +502,171 @@ export default function Tasks() {
         return a._dist - b._dist;
       });
     }
-    // 'all' and 'priority' — priority-weighted, then newest.
     return [...open].sort((a, b) =>
       (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1)
     );
   }, [tab, openPool, initiatedPool, userPos]);
 
-  // Leads with tasks stay on top, leads without tasks sink to the bottom.
-  // Within each group: nearest first (when location known), else newest first.
-  // Filtered by the search box (name, company, location, or task title).
   const displayedLeads = useMemo(() => {
     const q = leadSearch.trim().toLowerCase();
     const filtered = q
       ? leads.filter(l => {
-          const hay = [
-            l.fullName, l.company, l.location, l.phone,
-            ...(l.tasks || []).map(t => t.title)
-          ].filter(Boolean).join(' ').toLowerCase();
+          const hay = [l.fullName, l.company, l.location, l.phone, ...(l.tasks || []).map(t => t.title)]
+            .filter(Boolean).join(' ').toLowerCase();
           return hay.includes(q);
         })
       : leads;
-
     const hasTasks = l => (l.tasks?.length || 0) > 0;
     const distOf = l => (userPos && l.latitude != null && l.longitude != null)
-      ? distanceKm(userPos.lat, userPos.lng, l.latitude, l.longitude)
-      : Infinity;
+      ? distanceKm(userPos.lat, userPos.lng, l.latitude, l.longitude) : Infinity;
     return [...filtered].sort((a, b) => {
       const ha = hasTasks(a), hb = hasTasks(b);
-      if (ha !== hb) return ha ? -1 : 1;             // with-tasks first
-      if (userPos) return distOf(a) - distOf(b);      // then nearest
-      return new Date(b.createdAt) - new Date(a.createdAt); // else newest
+      if (ha !== hb) return ha ? -1 : 1;
+      if (userPos) return distOf(a) - distOf(b);
+      return new Date(b.createdAt) - new Date(a.createdAt);
     });
   }, [leads, userPos, leadSearch]);
 
-  // Default view ('all') shows all leads. The other tabs show the claim pool.
   const TABS = [
-    { key: 'priority', label: 'Priority Tasks', icon: Star },
-    { key: 'nearby', label: 'Nearby Tasks', icon: MapPin },
-    { key: 'initiated', label: 'All Initiated', icon: ListChecks }
+    { key: 'priority', label: 'Priority', icon: Star },
+    { key: 'nearby', label: 'Nearby', icon: MapPin },
+    { key: 'initiated', label: 'Initiated', icon: ListChecks }
   ];
   const showLeads = tab === 'all';
 
   return (
-    <div className="space-y-4 w-full max-w-2xl mx-auto pb-10 overflow-x-hidden">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-white">Tasks</h1>
+    <div className="w-full max-w-2xl mx-auto space-y-3 pb-10">
+
+      {/* Page heading */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-bold text-white">Tasks</h1>
         {isAdmin && (
-          <button onClick={() => setShowCreate(v => !v)} className="btn-primary px-3 py-1.5 text-sm flex items-center gap-1.5">
-            <Plus size={15} /> New Opportunity
+          <button
+            onClick={() => setShowCreate(v => !v)}
+            className="flex-shrink-0 flex items-center gap-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-xl transition-colors"
+          >
+            <Plus size={13} /> New Opportunity
           </button>
         )}
       </div>
 
       {/* Admin create form */}
       {isAdmin && showCreate && (
-        <form onSubmit={submitPoolTask} className="glass-card p-4 space-y-3">
-          <p className="text-sm font-semibold text-white">Add opportunity to team pool</p>
+        <form onSubmit={submitPoolTask} className="glass-card p-3 space-y-2.5">
+          <p className="text-xs font-semibold text-white">Add opportunity to team pool</p>
+
           <input
             type="text"
             value={form.projectName}
             onChange={e => setForm({ ...form, projectName: e.target.value })}
             placeholder="Project / site name *"
-            className="input-field text-sm w-full"
+            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
             required
           />
           <input
             type="text"
             value={form.address}
             onChange={e => setForm({ ...form, address: e.target.value })}
-            placeholder="Address / area (shown on card)"
-            className="input-field text-sm w-full"
+            placeholder="Address / area"
+            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
           />
 
-          {/* Task types — select one or more for this project */}
+          {/* Task options */}
           <div>
-            <p className="text-[11px] font-medium text-gray-400 mb-1.5">
-              Tasks <span className="text-gray-600">(select one or more)</span>
+            <p className="text-[10px] font-medium text-gray-400 mb-1">
+              Tasks (select one or more)
               {(selectedTasks.length + customTasks.length) > 0 && (
                 <span className="text-brand-300"> · {selectedTasks.length + customTasks.length} selected</span>
               )}
             </p>
-            <div className="max-h-36 overflow-y-auto rounded-xl border border-white/10 bg-dark-700/30 p-2 space-y-1 custom-scroll">
+            <div className="max-h-32 overflow-y-auto rounded-xl border border-white/10 bg-dark-700/30 p-1.5 space-y-0.5 custom-scroll">
               {TASK_OPTIONS.map(opt => {
                 const selected = selectedTasks.includes(opt);
                 return (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => toggleTaskOption(opt)}
-                    className={`w-full flex items-center gap-2.5 text-left text-sm rounded-lg px-3 py-2 transition-colors ${
-                      selected
-                        ? 'bg-brand-600/20 text-brand-100 border border-brand-500/40'
-                        : 'text-gray-300 hover:bg-white/5 border border-transparent'
-                    }`}
-                  >
-                    <span className={`w-4 h-4 rounded-[5px] flex-shrink-0 flex items-center justify-center border transition-colors ${
+                  <button key={opt} type="button" onClick={() => toggleTaskOption(opt)}
+                    className={`w-full flex items-center gap-2 text-left text-xs rounded-lg px-2.5 py-1.5 transition-colors ${
+                      selected ? 'bg-brand-600/20 text-brand-100 border border-brand-500/40' : 'text-gray-300 hover:bg-white/5 border border-transparent'
+                    }`}>
+                    <span className={`w-3.5 h-3.5 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
                       selected ? 'bg-brand-500 border-brand-500' : 'border-gray-500'
                     }`}>
-                      {selected && <Check size={11} className="text-white" strokeWidth={3} />}
+                      {selected && <Check size={9} className="text-white" strokeWidth={3} />}
                     </span>
                     {opt}
                   </button>
                 );
               })}
-
-              {/* Custom tasks already added */}
               {customTasks.map(ct => (
-                <div
-                  key={ct}
-                  className="w-full flex items-center gap-2.5 text-sm rounded-lg px-3 py-2 bg-brand-600/20 text-brand-100 border border-brand-500/40"
-                >
-                  <span className="w-4 h-4 rounded-[5px] flex-shrink-0 flex items-center justify-center bg-brand-500 border border-brand-500">
-                    <Check size={11} className="text-white" strokeWidth={3} />
+                <div key={ct} className="w-full flex items-center gap-2 text-xs rounded-lg px-2.5 py-1.5 bg-brand-600/20 text-brand-100 border border-brand-500/40">
+                  <span className="w-3.5 h-3.5 rounded flex-shrink-0 flex items-center justify-center bg-brand-500 border border-brand-500">
+                    <Check size={9} className="text-white" strokeWidth={3} />
                   </span>
                   <span className="flex-1 min-w-0 truncate">{ct}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeCustomTask(ct)}
-                    className="p-0.5 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-300 flex-shrink-0"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  <button type="button" onClick={() => removeCustomTask(ct)}
+                    className="text-gray-400 hover:text-red-300 flex-shrink-0"><Trash2 size={10} /></button>
                 </div>
               ))}
             </div>
-
-            {/* Add multiple custom tasks — type and press Enter or the + button */}
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-1.5 mt-1.5">
               <input
                 type="text"
                 value={customInput}
                 onChange={e => setCustomInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); addCustomTask(); }
-                }}
-                placeholder="Add a custom task…"
-                className="input-field text-sm flex-1"
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTask(); } }}
+                placeholder="Custom task…"
+                className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
               />
-              <button
-                type="button"
-                onClick={addCustomTask}
-                disabled={!customInput.trim()}
-                className="btn-secondary px-3 text-sm flex items-center gap-1 disabled:opacity-50"
-              >
-                <Plus size={14} /> Add
+              <button type="button" onClick={addCustomTask} disabled={!customInput.trim()}
+                className="flex-shrink-0 flex items-center gap-1 bg-dark-600 hover:bg-dark-500 border border-white/5 text-gray-300 text-xs font-medium px-2.5 py-1.5 rounded-xl disabled:opacity-50">
+                <Plus size={12} /> Add
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <select
-              value={form.priority}
-              onChange={e => setForm({ ...form, priority: e.target.value })}
-              className="input-field text-sm"
-            >
+          <div className="flex gap-2">
+            <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
+              className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
               <option value="HIGH">High priority</option>
               <option value="MEDIUM">Medium priority</option>
               <option value="LOW">Low priority</option>
             </select>
-            <input
-              type="url"
-              value={form.locationLink}
-              onChange={e => setForm({ ...form, locationLink: e.target.value })}
-              placeholder="Paste Google Maps location link"
-              className="input-field text-sm w-full"
-            />
           </div>
 
-          {/* Photo picker */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-dark-700/40 px-3 py-2 text-xs text-gray-300 hover:bg-dark-700/70"
-            >
-              <ImageIcon size={14} /> {photoFile ? 'Change photo' : 'Add site photo'}
+          <input
+            type="url"
+            value={form.locationLink}
+            onChange={e => setForm({ ...form, locationLink: e.target.value })}
+            placeholder="Google Maps link (optional)"
+            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
+          />
+
+          <div className="flex items-center gap-2.5">
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-dark-700/40 px-2.5 py-1.5 text-[11px] text-gray-300 hover:bg-dark-700/70">
+              <ImageIcon size={12} /> {photoFile ? 'Change photo' : 'Add photo'}
             </button>
             {photoPreview && (
-              <img src={photoPreview} alt="preview" className="w-12 h-12 rounded-lg object-cover" />
+              <img src={photoPreview} alt="preview" className="w-10 h-10 rounded-lg object-cover" />
             )}
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onPhotoChange} />
           </div>
 
-          <p className="text-[10px] text-gray-500 leading-relaxed">
-            For distance to show, use a Maps <span className="text-gray-300">location pin</span> link
-            (the address/place page, or "Share" &rarr; "Copy link"). Short links like maps.app.goo.gl work too.
-            Plain search links without a pin won't have coordinates.
-          </p>
-
-          <div className="flex gap-2 pt-1">
-            <button type="submit" disabled={submitting} className="btn-primary px-4 text-sm flex items-center gap-1.5 disabled:opacity-60">
-              {submitting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add to pool
+          <div className="flex gap-2 pt-0.5">
+            <button type="submit" disabled={submitting}
+              className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-xs font-semibold px-3 py-2 rounded-xl">
+              {submitting ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add to pool
             </button>
-            <button type="button" onClick={() => setShowCreate(false)} className="px-4 text-sm text-gray-400 hover:text-gray-200">Cancel</button>
+            <button type="button" onClick={() => setShowCreate(false)}
+              className="px-3 text-xs text-gray-400 hover:text-gray-200">Cancel</button>
           </div>
         </form>
       )}
 
-      {/* ---------------- Team Task Pool ---------------- */}
-      <section className="space-y-3 w-full">
-        {/* Tabs */}
-        <div className="grid grid-cols-3 gap-2">
+      {/* Task pool section */}
+      <section className="space-y-2.5 w-full min-w-0">
+
+        {/* Tabs — flex row, scrollable, no wrapping */}
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 custom-scroll">
           {TABS.map(t => {
             const Icon = t.icon;
             const active = tab === t.key;
@@ -741,36 +674,36 @@ export default function Tasks() {
               <button
                 key={t.key}
                 onClick={() => setTab(active ? 'all' : t.key)}
-                className={`flex items-center justify-center gap-1 rounded-xl border px-1.5 py-2.5 text-[10px] sm:text-xs font-semibold transition-colors min-w-0 ${
+                className={`flex-shrink-0 inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors whitespace-nowrap ${
                   active
                     ? 'border-brand-500 bg-brand-600/15 text-brand-200'
                     : 'border-white/8 bg-dark-700/40 text-gray-400 hover:text-gray-200'
                 }`}
               >
-                <Icon size={13} className="flex-shrink-0" />
-                <span className="truncate">{t.label}</span>
+                <Icon size={12} />
+                {t.label}
               </button>
             );
           })}
         </div>
 
-        {/* Location / context line */}
-        <div className="flex items-center justify-between text-[11px] text-gray-500">
+        {/* Context line */}
+        <div className="flex items-center justify-between text-[10px] text-gray-500">
           <span>
             {showLeads
-              ? `${leads.length} lead${leads.length === 1 ? '' : 's'} · everyone can see these`
+              ? `${leads.length} lead${leads.length === 1 ? '' : 's'}`
               : tab === 'initiated'
-              ? `${initiatedPool.length} project${initiatedPool.length === 1 ? '' : 's'} in progress`
-              : `${openPool.length} project${openPool.length === 1 ? '' : 's'} available to claim`}
+              ? `${initiatedPool.length} in progress`
+              : `${openPool.length} available`}
           </span>
           {tab !== 'initiated' && (
             geoStatus === 'ready' ? (
-              <span className="inline-flex items-center gap-1 text-green-400"><MapPin size={11} /> Location on</span>
+              <span className="inline-flex items-center gap-0.5 text-green-400"><MapPin size={10} /> On</span>
             ) : geoStatus === 'locating' ? (
-              <span className="inline-flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Locating…</span>
+              <span className="inline-flex items-center gap-0.5"><Loader2 size={10} className="animate-spin" /> Locating…</span>
             ) : (geoStatus === 'denied' || geoStatus === 'unsupported') ? (
-              <button onClick={requestLocation} className="inline-flex items-center gap-1 text-brand-300 hover:text-brand-200">
-                <MapPin size={11} /> Enable location
+              <button onClick={requestLocation} className="inline-flex items-center gap-0.5 text-brand-300 hover:text-brand-200">
+                <MapPin size={10} /> Enable location
               </button>
             ) : null
           )}
@@ -778,23 +711,21 @@ export default function Tasks() {
 
         {/* Cards */}
         {showLeads ? (
-          <div className="space-y-3">
-            {/* Search leads */}
+          <div className="space-y-2">
+            {/* Search */}
             <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
               <input
                 type="text"
                 value={leadSearch}
                 onChange={e => setLeadSearch(e.target.value)}
-                placeholder="Search leads by name, company, location, or task…"
-                className="input-field text-sm w-full pl-9 pr-9"
+                placeholder="Search leads…"
+                className="w-full bg-dark-700/80 border border-white/10 rounded-xl pl-8 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
               />
               {leadSearch && (
-                <button
-                  onClick={() => setLeadSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                >
-                  <X size={15} />
+                <button onClick={() => setLeadSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  <X size={13} />
                 </button>
               )}
             </div>
@@ -823,7 +754,7 @@ export default function Tasks() {
             ))}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {displayed.length === 0 && (
               <p className="text-xs text-gray-600 py-6 text-center">
                 {tab === 'initiated' ? 'No projects in progress yet.' : 'No opportunities available right now.'}
