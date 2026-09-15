@@ -124,7 +124,7 @@ export default function DashboardLayout() {
   });
 
   return (
-    <div className="min-h-screen bg-dark-900 flex">
+    <div className="min-h-screen bg-dark-900 flex overflow-x-hidden">
       {/* Desktop Sidebar */}
       <aside className={`hidden lg:flex flex-col fixed top-0 left-0 h-screen z-40 transition-all duration-300 
         ${sidebarOpen ? 'w-64' : 'w-20'} bg-dark-800 border-r border-white/5`}>
@@ -219,7 +219,7 @@ export default function DashboardLayout() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'}`}>
+      <div className={`flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'}`}>
         {/* Topbar */}
         <header className="sticky top-0 z-30 h-16 flex items-center justify-between px-4 lg:px-6 bg-dark-900/80 backdrop-blur-xl border-b border-white/5">
           <div className="flex items-center gap-3">
@@ -314,7 +314,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden overflow-y-auto">
+        <main className="flex-1 p-3 lg:p-6 overflow-x-hidden overflow-y-auto min-w-0 w-full">
           <Outlet />
         </main>
       </div>
