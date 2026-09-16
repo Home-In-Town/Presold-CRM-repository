@@ -263,7 +263,7 @@ function ClaimedGroup({ title, subtitle, photoUrl, initial, badge, badgeColor, t
 
                 {/* Title + team badge */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-medium leading-snug ${t.completed ? 'line-through text-gray-500' : 'text-white'}`}>
+                  <p className={`text-xs font-medium leading-snug ${t.completed === true ? 'line-through text-gray-500' : 'text-white'}`}>
                     {t.title}
                   </p>
                   {t.taskTeam && t.taskTeam !== 'ALL' && (
@@ -547,7 +547,7 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
                         )}
 
                         <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-medium leading-snug ${t.completed ? 'line-through text-gray-500' : 'text-white'}`}>
+                          <p className={`text-xs font-medium leading-snug ${t.completed === true ? 'line-through text-gray-500' : 'text-white'}`}>
                             {t.title}
                           </p>
                           <div className="flex items-center flex-wrap gap-1.5 mt-1">

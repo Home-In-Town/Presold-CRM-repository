@@ -534,16 +534,19 @@ router.post('/lead/:leadId/claim-selected', authenticate, async (req, res) => {
 
     // Only claim tasks that: belong to this lead, are in the requested IDs,
     // are unclaimed, and match the user's team.
-    const teamCond = isAllTeam ? {} : {
-      OR: [{ taskTeam: 'ALL' }, { taskTeam: ft }, { taskTeam: null }]
-    };
+    // Use AND array to safely combine id filter + teamCond without spread conflicts.
+    const andConditions = [
+      { id: { in: taskIds } },
+      { leadId: lead.id },
+      { userId: null }
+    ];
+    if (!isAllTeam) {
+      andConditions.push({
+        OR: [{ taskTeam: 'ALL' }, { taskTeam: ft }, { taskTeam: null }]
+      });
+    }
 
-    const claimWhere = {
-      id: { in: taskIds },
-      leadId: lead.id,
-      userId: null,
-      ...teamCond
-    };
+    const claimWhere = { AND: andConditions };
 
     const result = await prisma.task.updateMany({
       where: claimWhere,
