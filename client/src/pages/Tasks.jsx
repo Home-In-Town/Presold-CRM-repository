@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Hand, Flag, Check, MapPin, Navigation,
   Image as ImageIcon, Loader2, Star, ListChecks, Search, X,
   Phone, Mail, Building2, ChevronRight, ArrowLeft,
-  ExternalLink, Users, Briefcase, UserCircle2
+  ExternalLink, Users, Briefcase, UserCircle2, CheckCircle2
 } from 'lucide-react';
 import api, { resolveFileUrl } from '../services/api';
 import toast from 'react-hot-toast';
@@ -19,31 +19,27 @@ const PRIORITY_STYLES = {
   LOW:    'bg-sky-500/10 text-sky-300 border-sky-500/20',
 };
 
-const TASK_OPTIONS = [
-  'Site visit', 'Property demo call', 'Shoot reel / video', 'Photo shoot',
-  'Collect documents', 'Client meeting', 'Follow-up visit',
-  'Handover / possession', 'Survey / inspection', 'Deliver brochure / proposal',
-];
-
 const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
-// Keep in sync with server/src/routes/tasks.js TASK_TEAMS
+// Keep in sync with server TASK_TEAMS constant
 const TEAM_OPTIONS = [
-  { value: 'ALL',           label: 'All Teams',    short: 'All',     color: 'bg-gray-500/15 text-gray-300 border-gray-500/25'   },
-  { value: 'SALES_TEAM',   label: 'Sales Team',   short: 'Sales',   color: 'bg-brand-500/15 text-brand-300 border-brand-500/25' },
-  { value: 'B2B_SALES',    label: 'B2B Sales',    short: 'B2B',     color: 'bg-violet-500/15 text-violet-300 border-violet-500/25' },
-  { value: 'CONTENT_TEAM', label: 'Content Team', short: 'Content', color: 'bg-pink-500/15 text-pink-300 border-pink-500/25'   },
+  { value: 'ALL',           label: 'All Teams',    short: 'All',     color: 'bg-gray-500/15 text-gray-300 border-gray-500/25'    },
+  { value: 'SALES_TEAM',   label: 'Sales Team',   short: 'Sales',   color: 'bg-brand-500/15 text-brand-300 border-brand-500/25'  },
+  { value: 'B2B_SALES',    label: 'B2B Sales',    short: 'B2B',     color: 'bg-violet-500/15 text-violet-300 border-violet-500/25'},
+  { value: 'CONTENT_TEAM', label: 'Content Team', short: 'Content', color: 'bg-pink-500/15 text-pink-300 border-pink-500/25'     },
 ];
 const TEAM_META = Object.fromEntries(TEAM_OPTIONS.map(t => [t.value, t]));
+
+function teamLabel(val) {
+  return TEAM_META[val]?.label || val || 'Unknown';
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 function distanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const toRad = d => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
+  const R = 6371, toRad = d => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
   const a = Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -53,8 +49,16 @@ function formatDistance(km) {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
 }
 
+// Can this user claim a task with the given taskTeam?
+function canClaimTask(userFunctionalTeam, userRole, taskTeam) {
+  if (userRole === 'ADMIN') return true;
+  const ft = userFunctionalTeam || 'ALL';
+  if (ft === 'ALL') return true;
+  return !taskTeam || taskTeam === 'ALL' || taskTeam === ft;
+}
+
 // ---------------------------------------------------------------------------
-// Shared small components
+// Small shared UI
 // ---------------------------------------------------------------------------
 function PriorityBadge({ priority }) {
   const p = (priority || 'MEDIUM').toUpperCase();
@@ -65,38 +69,238 @@ function PriorityBadge({ priority }) {
   );
 }
 
-// Coloured pill that shows which team a task belongs to
-function TeamBadge({ taskTeam }) {
+function TeamBadge({ taskTeam, className = '' }) {
   const meta = TEAM_META[taskTeam];
   if (!meta || taskTeam === 'ALL') return null;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${meta.color}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${meta.color} ${className}`}>
       <Users size={8} />{meta.short}
     </span>
   );
 }
 
-// Thin dropdown used by admin to pick a team when adding tasks
 function TeamSelect({ value, onChange, className = '' }) {
   return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className={`bg-dark-700/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40 ${className}`}
-    >
-      {TEAM_OPTIONS.map(t => (
-        <option key={t.value} value={t.value}>{t.label}</option>
-      ))}
+    <select value={value} onChange={e => onChange(e.target.value)}
+      className={`bg-dark-700/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40 ${className}`}>
+      {TEAM_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
     </select>
+  );
+}
+
+// Avatar circle
+function Avatar({ user, size = 5 }) {
+  const cls = `w-${size} h-${size} rounded-full object-cover flex-shrink-0`;
+  if (user?.avatar) return <img src={resolveFileUrl(user.avatar)} alt={user.name} className={cls} />;
+  return (
+    <div className={`${cls} bg-brand-600/40 flex items-center justify-center text-[9px] font-bold text-brand-300`}>
+      {(user?.name || '?')[0]}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Claimed Tasks View
+// Shows all claimed tasks grouped by lead / opportunity.
+// Each task shows: title, team badge, claimed-by with avatar + team name.
+// ---------------------------------------------------------------------------
+function ClaimedTasksView() {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch]   = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/tasks/pool/claimed/all')
+      .then(r => { if (!cancelled) { setData(r.data); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Group lead tasks by leadId
+  const leadGroups = useMemo(() => {
+    if (!data?.leadTasks) return [];
+    const map = {};
+    data.leadTasks.forEach(t => {
+      const key = t.leadId;
+      if (!map[key]) map[key] = { lead: t.lead, tasks: [] };
+      map[key].tasks.push(t);
+    });
+    return Object.values(map);
+  }, [data]);
+
+  // Group opp tasks by opportunityId
+  const oppGroups = useMemo(() => {
+    if (!data?.oppTasks) return [];
+    const map = {};
+    data.oppTasks.forEach(t => {
+      const key = t.opportunityId;
+      if (!map[key]) map[key] = { opp: t.opportunity, tasks: [] };
+      map[key].tasks.push(t);
+    });
+    return Object.values(map);
+  }, [data]);
+
+  const q = search.trim().toLowerCase();
+
+  const filteredLeadGroups = useMemo(() => {
+    if (!q) return leadGroups;
+    return leadGroups.map(g => ({
+      ...g,
+      tasks: g.tasks.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        t.user?.name?.toLowerCase().includes(q) ||
+        g.lead?.fullName?.toLowerCase().includes(q)
+      )
+    })).filter(g => g.tasks.length > 0);
+  }, [leadGroups, q]);
+
+  const filteredOppGroups = useMemo(() => {
+    if (!q) return oppGroups;
+    return oppGroups.map(g => ({
+      ...g,
+      tasks: g.tasks.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        t.user?.name?.toLowerCase().includes(q) ||
+        g.opp?.projectName?.toLowerCase().includes(q)
+      )
+    })).filter(g => g.tasks.length > 0);
+  }, [oppGroups, q]);
+
+  const totalClaimed = (data?.leadTasks?.length || 0) + (data?.oppTasks?.length || 0);
+
+  return (
+    <div className="space-y-3">
+      {/* Search */}
+      <div className="relative">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search by task, lead or user…"
+          className="w-full bg-dark-700/80 border border-white/10 rounded-xl pl-8 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {loading && (
+        <p className="text-xs text-gray-500 py-6 text-center flex items-center justify-center gap-2">
+          <Loader2 size={13} className="animate-spin" />Loading claimed tasks…
+        </p>
+      )}
+
+      {!loading && totalClaimed === 0 && (
+        <p className="text-xs text-gray-600 py-8 text-center">No tasks have been claimed yet.</p>
+      )}
+
+      {/* Lead groups */}
+      {filteredLeadGroups.map(g => (
+        <ClaimedGroup
+          key={g.lead?.id}
+          title={g.lead?.fullName || 'Lead'}
+          subtitle={[g.lead?.company, g.lead?.location].filter(Boolean).join(' · ')}
+          photoUrl={g.lead?.files?.[0]?.url ? resolveFileUrl(g.lead.files[0].url) : null}
+          initial={g.lead?.fullName?.[0]}
+          badge="Lead"
+          badgeColor="bg-emerald-600"
+          tasks={g.tasks}
+        />
+      ))}
+
+      {/* Opportunity groups */}
+      {filteredOppGroups.map(g => (
+        <ClaimedGroup
+          key={g.opp?.id}
+          title={g.opp?.projectName || 'Opportunity'}
+          subtitle={g.opp?.address}
+          photoUrl={g.opp?.photoUrl ? resolveFileUrl(g.opp.photoUrl) : null}
+          initial={g.opp?.projectName?.[0]}
+          badge="Opp"
+          badgeColor="bg-brand-600"
+          tasks={g.tasks}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ClaimedGroup({ title, subtitle, photoUrl, initial, badge, badgeColor, tasks }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="glass-card overflow-hidden w-full">
+      {/* Header */}
+      <button className="w-full flex items-center gap-2 p-2.5 text-left" onClick={() => setOpen(v => !v)}>
+        <div className="relative w-10 h-10 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
+          {photoUrl
+            ? <img src={photoUrl} alt={title} className="w-full h-full object-cover" />
+            : <span className="text-sm font-bold text-brand-400/60">{initial}</span>}
+          <span className={`absolute top-0.5 left-0 ${badgeColor} text-white text-[6px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r shadow leading-none`}>
+            {badge}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-white truncate">{title}</p>
+          {subtitle && <p className="text-[11px] text-gray-400 truncate">{subtitle}</p>}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-[10px] text-gray-500">{tasks.length} task{tasks.length !== 1 ? 's' : ''}</span>
+          <ChevronRight size={13} className={`text-gray-600 transition-transform ${open ? 'rotate-90' : ''}`} />
+        </div>
+      </button>
+
+      {/* Task rows */}
+      {open && (
+        <div className="border-t border-white/8 divide-y divide-white/5">
+          {tasks.map(t => {
+            const claimer = t.user;
+            const claimerTeam = claimer?.functionalTeam;
+            const teamMt = TEAM_META[claimerTeam] || null;
+            return (
+              <div key={t.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                {/* Task status dot */}
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${t.completed ? 'bg-green-400' : 'bg-amber-400'}`} />
+
+                {/* Title + team badge */}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-medium leading-snug ${t.completed ? 'line-through text-gray-500' : 'text-white'}`}>
+                    {t.title}
+                  </p>
+                  {t.taskTeam && t.taskTeam !== 'ALL' && (
+                    <TeamBadge taskTeam={t.taskTeam} className="mt-0.5" />
+                  )}
+                </div>
+
+                {/* Claimed by */}
+                {claimer && (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <Avatar user={claimer} size={5} />
+                    <div className="text-right">
+                      <p className="text-[10px] text-white font-medium leading-none">{claimer.name}</p>
+                      {claimerTeam && claimerTeam !== 'ALL' && teamMt ? (
+                        <p className={`text-[9px] font-semibold leading-none mt-0.5 ${teamMt.color.split(' ').find(c => c.startsWith('text-'))}`}>
+                          {teamMt.label}
+                        </p>
+                      ) : (
+                        <p className="text-[9px] text-gray-500 leading-none mt-0.5">All Teams</p>
+                      )}
+                    </div>
+                    {t.completed && <Check size={11} className="text-green-400" />}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 // Lead Detail Modal
-// Opens when any lead card is tapped.
-// Shows full lead info + tasks (with team badges) + recent notes + files.
 // ---------------------------------------------------------------------------
-function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onClaim, claiming }) {
+function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDeleteTask, onClaim, claiming }) {
   const [detail, setDetail]         = useState(null);
   const [loadingDetail, setLoading] = useState(true);
   const [adding, setAdding]         = useState(false);
@@ -104,7 +308,6 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
   const [newTeam, setNewTeam]       = useState('ALL');
   const [savingAdd, setSavingAdd]   = useState(false);
 
-  // Fetch full lead (notes, files, activities)
   useEffect(() => {
     let cancelled = false;
     api.get(`/leads/${lead.id}`)
@@ -113,16 +316,20 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
     return () => { cancelled = true; };
   }, [lead.id]);
 
-  const tasks     = lead.tasks || [];
-  const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
-  const claimable  = tasks.some(t => !t.userId);
-  const claimant   = tasks.find(t => t.user?.name)?.user?.name || null;
+  const tasks   = lead.tasks || [];
+  const ft      = currentUser?.functionalTeam || 'ALL';
+  const isAdm   = currentUser?.role === 'ADMIN';
+
+  // Tasks this user can still claim (unclaimed + matches their team)
+  const claimableTasks = tasks.filter(t =>
+    !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam)
+  );
+  const hasClaimable = claimableTasks.length > 0;
 
   const submitAdd = async () => {
     const val = newTitle.trim();
     if (!val) return;
     setSavingAdd(true);
-    // Pass task as object so server gets per-task team
     await onAddTasks(lead.id, [{ title: val, taskTeam: newTeam }]);
     setNewTitle(''); setNewTeam('ALL');
     setSavingAdd(false); setAdding(false);
@@ -132,125 +339,88 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
 
   return (
     <AnimatePresence>
-      {/* Backdrop */}
-      <motion.div
-        key="backdrop"
+      <motion.div key="backdrop"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70"
-        onClick={onClose}
-      />
-      {/* Sheet */}
-      <motion.div
-        key="sheet"
+        className="fixed inset-0 z-50 bg-black/70" onClick={onClose} />
+      <motion.div key="sheet"
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 320 }}
         className="fixed inset-x-0 bottom-0 z-50 flex flex-col bg-dark-800 rounded-t-2xl border-t border-white/8 shadow-2xl"
-        style={{ maxHeight: '92dvh' }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Drag handle */}
+        style={{ maxHeight: '92dvh' }} onClick={e => e.stopPropagation()}>
+
+        {/* Handle */}
         <div className="flex justify-center pt-2 pb-1 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-white/15" />
         </div>
 
         {/* Header */}
         <div className="flex items-center gap-2.5 px-3 pb-2.5 flex-shrink-0 border-b border-white/8">
-          <button onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors flex-shrink-0">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors flex-shrink-0">
             <ArrowLeft size={16} />
           </button>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white truncate">{lead.fullName}</p>
             {(lead.company || lead.location) && (
-              <p className="text-[11px] text-gray-400 truncate">
-                {[lead.company, lead.location].filter(Boolean).join(' · ')}
-              </p>
+              <p className="text-[11px] text-gray-400 truncate">{[lead.company, lead.location].filter(Boolean).join(' · ')}</p>
             )}
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <PriorityBadge priority={lead.priority} />
             {lead.temperature && (
-              <span className={`text-[10px] font-bold ${TEMP_COLOR[lead.temperature] || 'text-gray-400'}`}>
-                {lead.temperature}
-              </span>
+              <span className={`text-[10px] font-bold ${TEMP_COLOR[lead.temperature] || 'text-gray-400'}`}>{lead.temperature}</span>
             )}
           </div>
         </div>
 
-        {/* Scrollable body */}
+        {/* Body */}
         <div className="overflow-y-auto flex-1 custom-scroll">
 
-          {/* ── Contact grid ── */}
+          {/* Contact grid */}
           <div className="p-3 grid grid-cols-2 gap-2">
             {lead.phone && (
-              <a href={`tel:${lead.phone}`}
-                className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5 hover:bg-dark-700/80 transition-colors">
+              <a href={`tel:${lead.phone}`} className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5 hover:bg-dark-700/80 transition-colors">
                 <Phone size={13} className="text-green-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Phone</p>
-                  <p className="text-xs text-white font-medium truncate">{lead.phone}</p>
-                </div>
+                <div className="min-w-0"><p className="text-[9px] text-gray-500 uppercase tracking-wide">Phone</p><p className="text-xs text-white font-medium truncate">{lead.phone}</p></div>
               </a>
             )}
             {(detail?.email || lead.email) && (
-              <a href={`mailto:${detail?.email || lead.email}`}
-                className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5 hover:bg-dark-700/80 transition-colors">
+              <a href={`mailto:${detail?.email || lead.email}`} className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5 hover:bg-dark-700/80 transition-colors">
                 <Mail size={13} className="text-blue-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Email</p>
-                  <p className="text-xs text-white font-medium truncate">{detail?.email || lead.email}</p>
-                </div>
+                <div className="min-w-0"><p className="text-[9px] text-gray-500 uppercase tracking-wide">Email</p><p className="text-xs text-white font-medium truncate">{detail?.email || lead.email}</p></div>
               </a>
             )}
             {lead.company && (
               <div className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5">
                 <Building2 size={13} className="text-brand-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Company</p>
-                  <p className="text-xs text-white font-medium truncate">{lead.company}</p>
-                </div>
+                <div className="min-w-0"><p className="text-[9px] text-gray-500 uppercase tracking-wide">Company</p><p className="text-xs text-white font-medium truncate">{lead.company}</p></div>
               </div>
             )}
             {lead.stage && (
               <div className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5">
                 <ChevronRight size={13} className="text-amber-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Stage</p>
-                  <p className="text-xs text-white font-medium truncate">{lead.stage.replace(/_/g, ' ')}</p>
-                </div>
+                <div className="min-w-0"><p className="text-[9px] text-gray-500 uppercase tracking-wide">Stage</p><p className="text-xs text-white font-medium truncate">{lead.stage.replace(/_/g, ' ')}</p></div>
               </div>
             )}
             {lead.budget && (
               <div className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5">
                 <Briefcase size={13} className="text-emerald-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Budget</p>
-                  <p className="text-xs text-white font-medium truncate">{lead.budget}</p>
-                </div>
+                <div className="min-w-0"><p className="text-[9px] text-gray-500 uppercase tracking-wide">Budget</p><p className="text-xs text-white font-medium truncate">{lead.budget}</p></div>
               </div>
             )}
             {lead.source && (
               <div className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5">
                 <UserCircle2 size={13} className="text-violet-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Source</p>
-                  <p className="text-xs text-white font-medium truncate">{lead.source.replace(/_/g, ' ')}</p>
-                </div>
+                <div className="min-w-0"><p className="text-[9px] text-gray-500 uppercase tracking-wide">Source</p><p className="text-xs text-white font-medium truncate">{lead.source.replace(/_/g, ' ')}</p></div>
               </div>
             )}
           </div>
 
-          {/* Assigned + map link row */}
+          {/* Assigned + map */}
           <div className="flex items-center justify-between gap-2 px-3 pb-3">
             {lead.assignedTo ? (
               <div className="flex items-center gap-1.5">
-                {lead.assignedTo.avatar
-                  ? <img src={resolveFileUrl(lead.assignedTo.avatar)} className="w-5 h-5 rounded-full object-cover" alt="" />
-                  : <div className="w-5 h-5 rounded-full bg-brand-600/40 flex items-center justify-center text-[9px] font-bold text-brand-300">{lead.assignedTo.name[0]}</div>
-                }
-                <span className="text-[11px] text-gray-400">
-                  Assigned to <span className="text-white">{lead.assignedTo.name}</span>
-                </span>
+                <Avatar user={lead.assignedTo} size={5} />
+                <span className="text-[11px] text-gray-400">Assigned to <span className="text-white">{lead.assignedTo.name}</span></span>
               </div>
             ) : <span className="text-[11px] text-gray-600">Unassigned</span>}
             {lead.locationLink && (
@@ -261,7 +431,7 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
             )}
           </div>
 
-          {/* ── Tasks section ── */}
+          {/* Tasks section */}
           <div className="border-t border-white/8 p-3 space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-white">
@@ -276,19 +446,15 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
               )}
             </div>
 
-            {/* Admin add-task form */}
+            {/* Admin add-task */}
             {isAdmin && adding && (
               <div className="space-y-1.5 bg-dark-700/40 rounded-xl p-2.5">
                 <div className="flex gap-1.5">
-                  <input
-                    autoFocus
-                    type="text"
-                    value={newTitle}
+                  <input autoFocus type="text" value={newTitle}
                     onChange={e => setNewTitle(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
                     placeholder="Task title…"
-                    className="flex-1 min-w-0 bg-dark-800/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
-                  />
+                    className="flex-1 min-w-0 bg-dark-800/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
                   <button onClick={submitAdd} disabled={savingAdd || !newTitle.trim()}
                     className="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-xl flex-shrink-0">
                     {savingAdd ? <Loader2 size={11} className="animate-spin" /> : 'Add'}
@@ -303,46 +469,76 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
               </div>
             )}
 
-            {/* Task list */}
+            {/* Task list — ALL tasks shown to ALL users */}
             {tasks.length === 0
-              ? <p className="text-[11px] text-gray-600 py-1">{isAdmin ? 'No tasks yet.' : 'No tasks for your team yet.'}</p>
+              ? <p className="text-[11px] text-gray-600 py-1">No tasks yet{isAdmin ? '. Add one above.' : '.'}</p>
               : (
                 <div className="space-y-1.5">
-                  {tasks.map(t => (
-                    <div key={t.id} className="flex items-start gap-2 bg-dark-700/40 rounded-xl px-3 py-2">
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium leading-snug ${t.completed ? 'line-through text-gray-500' : 'text-white'}`}>
-                          {t.title}
-                        </p>
-                        <div className="flex items-center flex-wrap gap-1.5 mt-1">
-                          <TeamBadge taskTeam={t.taskTeam} />
-                          {t.user
-                            ? <span className="text-[10px] text-gray-500">{t.completed ? '✓' : '→'} {t.user.name}</span>
-                            : <span className="text-[10px] text-amber-500/70">Unclaimed</span>
-                          }
+                  {tasks.map(t => {
+                    const claimer = t.user;
+                    const claimerTeam = claimer?.functionalTeam;
+                    const claimerTeamMeta = TEAM_META[claimerTeam];
+                    const isMyClaim = t.userId === currentUser?.id;
+                    const iCanClaim = !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam);
+
+                    return (
+                      <div key={t.id}
+                        className={`flex items-start gap-2 rounded-xl px-3 py-2 ${
+                          isMyClaim ? 'bg-brand-600/10 border border-brand-500/20' : 'bg-dark-700/40'
+                        }`}>
+                        {/* Status dot */}
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${t.completed ? 'bg-green-400' : t.userId ? 'bg-brand-400' : 'bg-amber-400'}`} />
+
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-medium leading-snug ${t.completed ? 'line-through text-gray-500' : 'text-white'}`}>
+                            {t.title}
+                          </p>
+                          <div className="flex items-center flex-wrap gap-1.5 mt-1">
+                            {/* Team this task belongs to */}
+                            <TeamBadge taskTeam={t.taskTeam} />
+
+                            {/* Claimed-by info */}
+                            {claimer ? (
+                              <span className="inline-flex items-center gap-1 text-[10px]">
+                                <Avatar user={claimer} size={4} />
+                                <span className="text-gray-400">{t.completed ? '✓ Done by' : 'By'} <span className="text-white font-medium">{claimer.name}</span></span>
+                                {claimerTeam && claimerTeam !== 'ALL' && claimerTeamMeta && (
+                                  <span className={`font-semibold ${claimerTeamMeta.color.split(' ').find(c => c.startsWith('text-'))}`}>
+                                    · {claimerTeamMeta.label}
+                                  </span>
+                                )}
+                                {isMyClaim && <span className="text-brand-400 font-semibold">(You)</span>}
+                              </span>
+                            ) : (
+                              iCanClaim
+                                ? <span className="text-[10px] text-amber-400/80 font-medium">Available for your team</span>
+                                : <span className="text-[10px] text-gray-600">Unclaimed</span>
+                            )}
+                          </div>
                         </div>
+
+                        {isAdmin && (
+                          <button onClick={() => onDeleteTask(lead.id, t.id)}
+                            className="p-0.5 text-gray-600 hover:text-red-400 flex-shrink-0 mt-0.5">
+                            <Trash2 size={11} />
+                          </button>
+                        )}
                       </div>
-                      {isAdmin && (
-                        <button onClick={() => onDeleteTask(lead.id, t.id)}
-                          className="p-0.5 text-gray-600 hover:text-red-400 flex-shrink-0 mt-0.5">
-                          <Trash2 size={11} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )
             }
           </div>
 
-          {/* ── Loading shimmer ── */}
+          {/* Loading shimmer */}
           {loadingDetail && (
             <div className="border-t border-white/8 p-3 flex items-center gap-2 text-xs text-gray-500">
               <Loader2 size={12} className="animate-spin" />Loading details…
             </div>
           )}
 
-          {/* ── Recent notes ── */}
+          {/* Recent notes */}
           {!loadingDetail && detail?.notes?.length > 0 && (
             <div className="border-t border-white/8 p-3 space-y-2">
               <p className="text-xs font-semibold text-white">Recent Notes</p>
@@ -355,7 +551,7 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
             </div>
           )}
 
-          {/* ── File thumbnails ── */}
+          {/* File thumbnails */}
           {!loadingDetail && detail?.files?.length > 0 && (
             <div className="border-t border-white/8 p-3 space-y-2">
               <p className="text-xs font-semibold text-white">Files</p>
@@ -371,29 +567,24 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
               </div>
             </div>
           )}
-
           <div className="h-4" />
         </div>
 
-        {/* ── Footer — Claim button ── */}
-        {tasks.length > 0 && (
-          allClaimed
-            ? (
-              <div className="flex-shrink-0 w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-3 flex items-center justify-center gap-1.5 border-t border-white/8">
-                <Check size={12} className="text-green-400" />
-                Claimed{claimant ? ` by ${claimant}` : ''}
-              </div>
-            ) : (
-              <button
-                onClick={() => { onClaim(lead.id); onClose(); }}
-                disabled={claiming || !claimable}
-                className="flex-shrink-0 w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-3.5 flex items-center justify-center gap-2 transition-colors border-t border-white/8"
-              >
-                {claiming ? <Loader2 size={14} className="animate-spin" /> : <Hand size={14} />}
-                {claiming ? 'Claiming…' : tasks.length > 1 ? 'Claim All Tasks' : 'Claim Task'}
-              </button>
-            )
-        )}
+        {/* Footer — Claim button */}
+        {hasClaimable ? (
+          <button
+            onClick={() => { onClaim(lead.id); onClose(); }}
+            disabled={claiming}
+            className="flex-shrink-0 w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-3.5 flex items-center justify-center gap-2 transition-colors border-t border-white/8">
+            {claiming ? <Loader2 size={14} className="animate-spin" /> : <Hand size={14} />}
+            {claiming ? 'Claiming…' : `Claim My Team's Task${claimableTasks.length > 1 ? 's' : ''} (${claimableTasks.length})`}
+          </button>
+        ) : tasks.length > 0 ? (
+          <div className="flex-shrink-0 w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-3 flex items-center justify-center gap-1.5 border-t border-white/8">
+            <CheckCircle2 size={13} className="text-green-400" />
+            All tasks claimed
+          </div>
+        ) : null}
       </motion.div>
     </AnimatePresence>
   );
@@ -402,19 +593,21 @@ function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onC
 // ---------------------------------------------------------------------------
 // Opportunity card
 // ---------------------------------------------------------------------------
-function OpportunityCard({ opp, userPos, onClaim, claiming, canDelete, onDelete }) {
+function OpportunityCard({ opp, userPos, currentUser, onClaim, claiming, canDelete, onDelete }) {
   const dist = useMemo(() => {
     if (!userPos || opp.latitude == null || opp.longitude == null) return null;
     return distanceKm(userPos.lat, userPos.lng, opp.latitude, opp.longitude);
   }, [userPos, opp.latitude, opp.longitude]);
 
-  const tasks      = opp.tasks || [];
+  const tasks = opp.tasks || [];
+  const ft    = currentUser?.functionalTeam || 'ALL';
+
+  // Tasks this user can claim
+  const claimable = tasks.filter(t => !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam));
   const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
-  const claimant   = tasks.find(t => t.user?.name)?.user?.name || null;
 
   return (
     <div className="glass-card overflow-hidden w-full">
-      {/* Header */}
       <div className="flex gap-2 p-2.5">
         <div className="relative w-12 h-12 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
           {opp.photoUrl
@@ -451,37 +644,52 @@ function OpportunityCard({ opp, userPos, onClaim, claiming, canDelete, onDelete 
         </div>
       </div>
 
-      {/* Task chips — coloured by team */}
+      {/* Task chips — coloured by team, claimed tasks show claimer */}
       {tasks.length > 0 && (
-        <div className="px-2.5 pb-2 overflow-x-auto custom-scroll">
-          <div className="flex gap-1 w-max">
-            {tasks.map(t => {
-              const meta = TEAM_META[t.taskTeam] || TEAM_META['ALL'];
-              const hasTeam = t.taskTeam && t.taskTeam !== 'ALL';
-              return (
-                <span key={t.id}
-                  className={`flex-shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${hasTeam ? meta.color : 'bg-dark-700/50 border-white/10 text-gray-200'}`}>
+        <div className="px-2.5 pb-2 space-y-1">
+          {tasks.map(t => {
+            const meta    = TEAM_META[t.taskTeam] || TEAM_META['ALL'];
+            const hasTeam = t.taskTeam && t.taskTeam !== 'ALL';
+            const claimer = t.user;
+            const claimerTeamMeta = claimer?.functionalTeam ? TEAM_META[claimer.functionalTeam] : null;
+            return (
+              <div key={t.id} className="flex items-center gap-1.5 flex-wrap">
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${hasTeam ? meta.color : 'bg-dark-700/50 border-white/10 text-gray-200'}`}>
                   {hasTeam && <Users size={8} className="flex-shrink-0" />}
                   {t.title}
                 </span>
-              );
-            })}
-          </div>
+                {claimer && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
+                    <Avatar user={claimer} size={4} />
+                    <span>{claimer.name}</span>
+                    {claimerTeamMeta && claimerTeamMeta.value !== 'ALL' && (
+                      <span className={`font-semibold ${claimerTeamMeta.color.split(' ').find(c => c.startsWith('text-'))}`}>
+                        · {claimerTeamMeta.label}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Footer */}
       {allClaimed ? (
         <div className="w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-2 flex items-center justify-center gap-1.5">
-          <Check size={12} className="text-green-400" />
-          Claimed{claimant ? ` by ${claimant}` : ''}
+          <Check size={12} className="text-green-400" />All tasks claimed
         </div>
-      ) : (
+      ) : claimable.length > 0 ? (
         <button onClick={() => onClaim(opp)} disabled={claiming}
           className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 transition-colors">
           {claiming ? <Loader2 size={13} className="animate-spin" /> : <Hand size={13} />}
-          {claiming ? 'Claiming…' : tasks.length > 1 ? 'Claim Tasks' : 'Claim Task'}
+          {claiming ? 'Claiming…' : `Claim My Task${claimable.length > 1 ? 's' : ''} (${claimable.length})`}
         </button>
+      ) : (
+        <div className="w-full bg-dark-700/40 text-gray-600 text-[11px] py-2 flex items-center justify-center gap-1.5">
+          No tasks for your team
+        </div>
       )}
     </div>
   );
@@ -490,45 +698,36 @@ function OpportunityCard({ opp, userPos, onClaim, claiming, canDelete, onDelete 
 // ---------------------------------------------------------------------------
 // Lead card — compact row, tap opens detail modal
 // ---------------------------------------------------------------------------
-function LeadCard({ lead, userPos, onOpenDetail }) {
+function LeadCard({ lead, userPos, currentUser, onOpenDetail }) {
   const dist = useMemo(() => {
     if (!userPos || lead.latitude == null || lead.longitude == null) return null;
     return distanceKm(userPos.lat, userPos.lng, lead.latitude, lead.longitude);
   }, [userPos, lead.latitude, lead.longitude]);
 
-  const tasks      = lead.tasks || [];
-  const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
-  const photoUrl   = lead.files?.[0]?.url ? resolveFileUrl(lead.files[0].url) : null;
+  const tasks    = lead.tasks || [];
+  const photoUrl = lead.files?.[0]?.url ? resolveFileUrl(lead.files[0].url) : null;
+  const ft       = currentUser?.functionalTeam || 'ALL';
 
-  // Distinct teams represented in this lead's tasks
-  const teamTags = [...new Set(tasks.map(t => t.taskTeam).filter(t => t && t !== 'ALL'))];
+  const claimableTasks = tasks.filter(t => !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam));
+  const allClaimed     = tasks.length > 0 && tasks.every(t => !!t.userId);
 
   return (
-    <div
-      className="glass-card overflow-hidden w-full cursor-pointer active:scale-[0.99] transition-transform"
-      onClick={() => onOpenDetail(lead)}
-    >
+    <div className="glass-card overflow-hidden w-full cursor-pointer active:scale-[0.99] transition-transform"
+      onClick={() => onOpenDetail(lead)}>
       <div className="flex gap-2 p-2.5">
-        {/* Avatar */}
         <div className="relative w-12 h-12 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
           {photoUrl
             ? <img src={photoUrl} alt={lead.fullName} className="w-full h-full object-cover" />
             : <span className="text-base font-bold text-brand-400/60">{lead.fullName[0]}</span>}
-          <span className="absolute top-0.5 left-0 bg-emerald-600 text-white text-[6px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r shadow leading-none">
-            Lead
-          </span>
+          <span className="absolute top-0.5 left-0 bg-emerald-600 text-white text-[6px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r shadow leading-none">Lead</span>
         </div>
-
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-1">
             <p className="text-xs font-bold text-white leading-snug break-words flex-1 min-w-0">{lead.fullName}</p>
             <ChevronRight size={14} className="text-gray-600 flex-shrink-0 mt-0.5" />
           </div>
           {(lead.company || lead.location) && (
-            <p className="text-[11px] text-gray-400 truncate mt-0.5">
-              {[lead.company, lead.location].filter(Boolean).join(' · ')}
-            </p>
+            <p className="text-[11px] text-gray-400 truncate mt-0.5">{[lead.company, lead.location].filter(Boolean).join(' · ')}</p>
           )}
           <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1 mt-1">
             <PriorityBadge priority={lead.priority} />
@@ -538,8 +737,7 @@ function LeadCard({ lead, userPos, onOpenDetail }) {
               </span>
             )}
             {lead.locationLink && (
-              <a href={lead.locationLink} target="_blank" rel="noreferrer"
-                onClick={e => e.stopPropagation()}
+              <a href={lead.locationLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                 className="inline-flex items-center gap-0.5 text-[10px] text-brand-300 hover:text-brand-200">
                 <MapPin size={10} />View
               </a>
@@ -548,34 +746,51 @@ function LeadCard({ lead, userPos, onOpenDetail }) {
         </div>
       </div>
 
-      {/* Task summary chips — scrollable, coloured by team */}
+      {/* Task chips — all tasks shown, coloured by team, claimed ones show claimer */}
       {tasks.length > 0 && (
-        <div className="px-2.5 pb-2 overflow-x-auto custom-scroll" onClick={e => e.stopPropagation()}>
-          <div className="flex gap-1 w-max">
-            {tasks.map(t => {
-              const meta   = TEAM_META[t.taskTeam] || TEAM_META['ALL'];
-              const hasTeam = t.taskTeam && t.taskTeam !== 'ALL';
-              return (
-                <span key={t.id}
-                  className={`flex-shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${hasTeam ? meta.color : 'bg-dark-700/50 border-white/10 text-gray-200'}`}>
+        <div className="px-2.5 pb-2 space-y-1" onClick={e => e.stopPropagation()}>
+          {tasks.map(t => {
+            const meta    = TEAM_META[t.taskTeam] || TEAM_META['ALL'];
+            const hasTeam = t.taskTeam && t.taskTeam !== 'ALL';
+            const claimer = t.user;
+            const claimerTeamMeta = claimer?.functionalTeam ? TEAM_META[claimer.functionalTeam] : null;
+            return (
+              <div key={t.id} className="flex items-center gap-1.5 flex-wrap">
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${hasTeam ? meta.color : 'bg-dark-700/50 border-white/10 text-gray-200'}`}>
                   {hasTeam && <Users size={8} className="flex-shrink-0" />}
                   {t.title}
                 </span>
-              );
-            })}
-          </div>
+                {claimer ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
+                    <Avatar user={claimer} size={4} />
+                    <span>{claimer.name}</span>
+                    {claimerTeamMeta && claimerTeamMeta.value !== 'ALL' && (
+                      <span className={`font-semibold ${claimerTeamMeta.color.split(' ').find(c => c.startsWith('text-'))}`}>
+                        · {claimerTeamMeta.label}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-amber-500/60">Unclaimed</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Claimed / task count footer */}
+      {/* Footer */}
       {allClaimed ? (
         <div className="w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-1.5 flex items-center justify-center gap-1.5">
-          <Check size={11} className="text-green-400" />
-          Claimed
+          <Check size={11} className="text-green-400" />All tasks claimed
+        </div>
+      ) : claimableTasks.length > 0 ? (
+        <div className="w-full bg-brand-600/10 text-brand-300 text-[11px] font-semibold py-1.5 flex items-center justify-center gap-1.5">
+          <Hand size={11} />{claimableTasks.length} task{claimableTasks.length > 1 ? 's' : ''} available for your team · tap to claim
         </div>
       ) : tasks.length > 0 ? (
-        <div className="w-full bg-brand-600/10 text-brand-300 text-[11px] font-semibold py-1.5 flex items-center justify-center gap-1.5">
-          <Hand size={11} />{tasks.length} task{tasks.length > 1 ? 's' : ''} · tap to claim
+        <div className="w-full bg-dark-700/40 text-gray-600 text-[11px] py-1.5 flex items-center justify-center">
+          Tap to view
         </div>
       ) : null}
     </div>
@@ -589,23 +804,23 @@ export default function Tasks() {
   const { user } = useAuth();
   const isAdmin  = user?.role === 'ADMIN';
 
-  const [tab, setTab]                   = useState('all');
-  const [openPool, setOpenPool]         = useState([]);
+  const [tab, setTab]                     = useState('all');
+  const [openPool, setOpenPool]           = useState([]);
   const [initiatedPool, setInitiatedPool] = useState([]);
-  const [claimingId, setClaimingId]     = useState(null);
+  const [claimingId, setClaimingId]       = useState(null);
 
   const [leads, setLeads]               = useState([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadSearch, setLeadSearch]     = useState('');
-  const [detailLead, setDetailLead]     = useState(null); // open modal for this lead
+  const [detailLead, setDetailLead]     = useState(null);
 
-  const [userPos, setUserPos]           = useState(null);
-  const [geoStatus, setGeoStatus]       = useState('idle');
+  const [userPos, setUserPos]   = useState(null);
+  const [geoStatus, setGeoStatus] = useState('idle');
 
   // Admin create-opportunity form
   const [showCreate, setShowCreate]     = useState(false);
   const [form, setForm]                 = useState({ projectName: '', address: '', priority: 'MEDIUM', locationLink: '' });
-  const [taskRows, setTaskRows]         = useState([{ title: '', taskTeam: 'ALL' }]); // per-task rows
+  const [taskRows, setTaskRows]         = useState([{ title: '', taskTeam: 'ALL' }]);
   const [photoFile, setPhotoFile]       = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [submitting, setSubmitting]     = useState(false);
@@ -645,25 +860,20 @@ export default function Tasks() {
     );
   };
 
-  // ── Lead helpers ─────────────────────────────────────────────────────────
+  // ── Lead helpers ──────────────────────────────────────────────────────────
   const resortLeads = list =>
     [...list].sort((a, b) => {
-      const aHas = (a.tasks?.length || 0) > 0;
-      const bHas = (b.tasks?.length || 0) > 0;
+      const aHas = (a.tasks?.length || 0) > 0, bHas = (b.tasks?.length || 0) > 0;
       if (aHas !== bHas) return aHas ? -1 : 1;
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
 
   const addLeadTasks = async (leadId, entries) => {
-    // entries: array of { title, taskTeam } objects OR plain strings (fallback)
-    const normalised = entries.map(e =>
-      typeof e === 'string' ? { title: e, taskTeam: 'ALL' } : e
-    );
+    const normalised = entries.map(e => typeof e === 'string' ? { title: e, taskTeam: 'ALL' } : e);
     try {
       const res = await api.post(`/tasks/lead/${leadId}`, { titles: normalised });
       setLeads(prev => resortLeads(prev.map(l => l.id === leadId ? { ...l, tasks: res.data.tasks } : l)));
-      // Refresh the modal's lead data too
-      setDetailLead(prev => prev && prev.id === leadId ? { ...prev, tasks: res.data.tasks } : prev);
+      setDetailLead(prev => prev?.id === leadId ? { ...prev, tasks: res.data.tasks } : prev);
       toast.success('Task added');
     } catch (err) { toast.error(err.response?.data?.error || 'Failed to add task'); }
   };
@@ -672,29 +882,27 @@ export default function Tasks() {
     setClaimingId(leadId);
     try {
       const res = await api.post(`/tasks/lead/${leadId}/claim`);
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, tasks: res.data.tasks } : l));
+      setLeads(prev => resortLeads(prev.map(l => l.id === leadId ? { ...l, tasks: res.data.tasks } : l)));
+      setDetailLead(prev => prev?.id === leadId ? { ...prev, tasks: res.data.tasks } : prev);
       loadPool();
-      toast.success('Lead claimed 🙌');
+      toast.success('Tasks claimed 🙌');
     } catch (err) {
-      if (err.response?.status === 409) { toast.error('Already claimed'); loadLeads(); }
-      else toast.error('Failed to claim lead');
+      const msg = err.response?.data?.error || 'Failed to claim';
+      if (err.response?.status === 409) { toast.error(msg); loadLeads(); }
+      else toast.error(msg);
     }
     setClaimingId(null);
   };
 
   const deleteLeadTask = async (leadId, taskId) => {
-    setLeads(prev => resortLeads(prev.map(l =>
-      l.id !== leadId ? l : { ...l, tasks: l.tasks.filter(t => t.id !== taskId) }
-    )));
-    setDetailLead(prev => prev && prev.id === leadId
-      ? { ...prev, tasks: prev.tasks.filter(t => t.id !== taskId) }
-      : prev
-    );
+    const remove = arr => arr.filter(t => t.id !== taskId);
+    setLeads(prev => resortLeads(prev.map(l => l.id !== leadId ? l : { ...l, tasks: remove(l.tasks) })));
+    setDetailLead(prev => prev?.id === leadId ? { ...prev, tasks: remove(prev.tasks) } : prev);
     try { await api.delete(`/tasks/lead-task/${taskId}`); }
     catch { toast.error('Failed to delete task'); loadLeads(); }
   };
 
-  // ── Pool claim / delete ───────────────────────────────────────────────────
+  // ── Pool actions ──────────────────────────────────────────────────────────
   const claimProject = async (card) => {
     setClaimingId(card.id);
     const url = card.type === 'lead'
@@ -703,10 +911,11 @@ export default function Tasks() {
     try {
       await api.post(url);
       await Promise.all([loadPool(), loadLeads()]);
-      toast.success(card.type === 'lead' ? 'Lead claimed 🙌' : 'Project claimed 🙌');
+      toast.success('Tasks claimed 🙌');
     } catch (err) {
-      if (err.response?.status === 409) { toast.error('Already claimed'); await loadPool(); }
-      else toast.error('Failed to claim');
+      const msg = err.response?.data?.error || 'Failed to claim';
+      if (err.response?.status === 409) { toast.error(msg); await loadPool(); }
+      else toast.error(msg);
     }
     setClaimingId(null);
   };
@@ -726,18 +935,16 @@ export default function Tasks() {
     } catch { toast.error('Failed to delete'); }
   };
 
-  // ── Admin create-opportunity form ─────────────────────────────────────────
+  // ── Admin create-opportunity ───────────────────────────────────────────────
   const onPhotoChange = e => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
   };
-
   const updateTaskRow = (idx, field, val) =>
     setTaskRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r));
-
-  const addTaskRow = () => setTaskRows(prev => [...prev, { title: '', taskTeam: 'ALL' }]);
+  const addTaskRow    = () => setTaskRows(prev => [...prev, { title: '', taskTeam: 'ALL' }]);
   const removeTaskRow = idx => setTaskRows(prev => prev.filter((_, i) => i !== idx));
 
   const submitPoolTask = async e => {
@@ -745,7 +952,6 @@ export default function Tasks() {
     if (!form.projectName.trim()) { toast.error('Project / site name is required'); return; }
     const validRows = taskRows.filter(r => r.title.trim());
     if (validRows.length === 0) { toast.error('Add at least one task'); return; }
-
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -756,7 +962,6 @@ export default function Tasks() {
       fd.append('priority',  form.priority);
       if (form.locationLink.trim()) fd.append('locationLink', form.locationLink.trim());
       if (photoFile) fd.append('photo', photoFile);
-
       const res = await api.post('/tasks/pool', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       setOpenPool(prev => [res.data, ...prev]);
       setForm({ projectName: '', address: '', priority: 'MEDIUM', locationLink: '' });
@@ -769,12 +974,11 @@ export default function Tasks() {
     setSubmitting(false);
   };
 
-  // ── Derived display lists ─────────────────────────────────────────────────
+  // ── Derived lists ─────────────────────────────────────────────────────────
   const withDist = list => list.map(o => ({
     ...o,
     _dist: (userPos && o.latitude != null && o.longitude != null)
-      ? distanceKm(userPos.lat, userPos.lng, o.latitude, o.longitude)
-      : null
+      ? distanceKm(userPos.lat, userPos.lng, o.latitude, o.longitude) : null
   }));
 
   const displayed = useMemo(() => {
@@ -808,11 +1012,13 @@ export default function Tasks() {
   }, [leads, userPos, leadSearch]);
 
   const TABS = [
-    { key: 'priority', label: 'Priority',  icon: Star },
-    { key: 'nearby',   label: 'Nearby',    icon: MapPin },
-    { key: 'initiated',label: 'Initiated', icon: ListChecks },
+    { key: 'priority',  label: 'Priority',  icon: Star },
+    { key: 'nearby',    label: 'Nearby',    icon: MapPin },
+    { key: 'initiated', label: 'Initiated', icon: ListChecks },
+    { key: 'claimed',   label: 'Claimed',   icon: CheckCircle2 },
   ];
-  const showLeads = tab === 'all';
+  const showLeads   = tab === 'all';
+  const showClaimed = tab === 'claimed';
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -824,6 +1030,7 @@ export default function Tasks() {
           lead={detailLead}
           onClose={() => setDetailLead(null)}
           isAdmin={isAdmin}
+          currentUser={user}
           onAddTasks={addLeadTasks}
           onDeleteTask={deleteLeadTask}
           onClaim={claimLead}
@@ -835,52 +1042,34 @@ export default function Tasks() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-bold text-white">Tasks</h1>
         {isAdmin && (
-          <button
-            onClick={() => setShowCreate(v => !v)}
-            className="flex-shrink-0 flex items-center gap-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-xl transition-colors"
-          >
+          <button onClick={() => setShowCreate(v => !v)}
+            className="flex-shrink-0 flex items-center gap-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-xl transition-colors">
             <Plus size={13} />New Opportunity
           </button>
         )}
       </div>
 
-      {/* ── Admin create-opportunity form ── */}
+      {/* Admin create-opportunity form */}
       {isAdmin && showCreate && (
         <form onSubmit={submitPoolTask} className="glass-card p-3 space-y-2.5">
           <p className="text-xs font-semibold text-white">Add opportunity to team pool</p>
-
-          <input type="text" value={form.projectName}
-            onChange={e => setForm({ ...form, projectName: e.target.value })}
+          <input type="text" value={form.projectName} onChange={e => setForm({ ...form, projectName: e.target.value })}
             placeholder="Project / site name *" required
             className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
-
-          <input type="text" value={form.address}
-            onChange={e => setForm({ ...form, address: e.target.value })}
+          <input type="text" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })}
             placeholder="Address / area"
             className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
-
-          {/* Per-task rows: title + team */}
+          {/* Per-task rows */}
           <div className="space-y-1.5">
-            <p className="text-[11px] text-gray-400 font-medium">
-              Tasks <span className="text-gray-600">(assign a team to each)</span>
-            </p>
+            <p className="text-[11px] text-gray-400 font-medium">Tasks <span className="text-gray-600">(assign a team to each)</span></p>
             {taskRows.map((row, idx) => (
               <div key={idx} className="flex gap-1.5 items-center">
-                <input
-                  type="text"
-                  value={row.title}
-                  onChange={e => updateTaskRow(idx, 'title', e.target.value)}
+                <input type="text" value={row.title} onChange={e => updateTaskRow(idx, 'title', e.target.value)}
                   placeholder={`Task ${idx + 1}…`}
-                  className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
-                />
-                <TeamSelect
-                  value={row.taskTeam}
-                  onChange={val => updateTaskRow(idx, 'taskTeam', val)}
-                  className="flex-shrink-0"
-                />
+                  className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
+                <TeamSelect value={row.taskTeam} onChange={val => updateTaskRow(idx, 'taskTeam', val)} className="flex-shrink-0" />
                 {taskRows.length > 1 && (
-                  <button type="button" onClick={() => removeTaskRow(idx)}
-                    className="p-1 text-gray-600 hover:text-red-400 flex-shrink-0">
+                  <button type="button" onClick={() => removeTaskRow(idx)} className="p-1 text-gray-600 hover:text-red-400 flex-shrink-0">
                     <X size={13} />
                   </button>
                 )}
@@ -891,7 +1080,6 @@ export default function Tasks() {
               <Plus size={11} />Add another task
             </button>
           </div>
-
           <div className="flex gap-2">
             <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
               className="flex-1 bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
@@ -900,12 +1088,9 @@ export default function Tasks() {
               <option value="LOW">Low priority</option>
             </select>
           </div>
-
-          <input type="url" value={form.locationLink}
-            onChange={e => setForm({ ...form, locationLink: e.target.value })}
+          <input type="url" value={form.locationLink} onChange={e => setForm({ ...form, locationLink: e.target.value })}
             placeholder="Google Maps link (optional)"
             className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
-
           <div className="flex items-center gap-2.5">
             <button type="button" onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-dark-700/40 px-2.5 py-1.5 text-[11px] text-gray-300 hover:bg-dark-700/70">
@@ -914,7 +1099,6 @@ export default function Tasks() {
             {photoPreview && <img src={photoPreview} alt="preview" className="w-10 h-10 rounded-lg object-cover" />}
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onPhotoChange} />
           </div>
-
           <div className="flex gap-2 pt-0.5">
             <button type="submit" disabled={submitting}
               className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-xs font-semibold px-3 py-2 rounded-xl">
@@ -926,7 +1110,7 @@ export default function Tasks() {
         </form>
       )}
 
-      {/* ── Pool section ── */}
+      {/* Pool section */}
       <section className="space-y-2.5 w-full min-w-0">
 
         {/* Tabs */}
@@ -948,42 +1132,43 @@ export default function Tasks() {
         </div>
 
         {/* Context / location line */}
-        <div className="flex items-center justify-between text-[10px] text-gray-500">
-          <span>
-            {showLeads
-              ? `${leads.length} lead${leads.length === 1 ? '' : 's'}`
-              : tab === 'initiated'
-              ? `${initiatedPool.length} in progress`
-              : `${openPool.length} available`}
-          </span>
-          {tab !== 'initiated' && (
-            geoStatus === 'ready'
-              ? <span className="inline-flex items-center gap-0.5 text-green-400"><MapPin size={10} />On</span>
-              : geoStatus === 'locating'
-              ? <span className="inline-flex items-center gap-0.5"><Loader2 size={10} className="animate-spin" />Locating…</span>
-              : (geoStatus === 'denied' || geoStatus === 'unsupported')
-              ? <button onClick={requestLocation} className="inline-flex items-center gap-0.5 text-brand-300 hover:text-brand-200"><MapPin size={10} />Enable location</button>
-              : null
-          )}
-        </div>
+        {!showClaimed && (
+          <div className="flex items-center justify-between text-[10px] text-gray-500">
+            <span>
+              {showLeads
+                ? `${leads.length} lead${leads.length === 1 ? '' : 's'}`
+                : tab === 'initiated' ? `${initiatedPool.length} in progress`
+                : `${openPool.length} available`}
+            </span>
+            {tab !== 'initiated' && (
+              geoStatus === 'ready'
+                ? <span className="inline-flex items-center gap-0.5 text-green-400"><MapPin size={10} />On</span>
+                : geoStatus === 'locating'
+                ? <span className="inline-flex items-center gap-0.5"><Loader2 size={10} className="animate-spin" />Locating…</span>
+                : (geoStatus === 'denied' || geoStatus === 'unsupported')
+                ? <button onClick={requestLocation} className="inline-flex items-center gap-0.5 text-brand-300 hover:text-brand-200"><MapPin size={10} />Enable location</button>
+                : null
+            )}
+          </div>
+        )}
 
-        {/* Cards */}
-        {showLeads ? (
+        {/* ── Claimed tasks view ── */}
+        {showClaimed && <ClaimedTasksView />}
+
+        {/* ── Leads view ── */}
+        {showLeads && (
           <div className="space-y-2">
-            {/* Search */}
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
               <input type="text" value={leadSearch} onChange={e => setLeadSearch(e.target.value)}
                 placeholder="Search leads…"
                 className="w-full bg-dark-700/80 border border-white/10 rounded-xl pl-8 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
               {leadSearch && (
-                <button onClick={() => setLeadSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                <button onClick={() => setLeadSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
                   <X size={13} />
                 </button>
               )}
             </div>
-
             {leadsLoading && displayedLeads.length === 0 && (
               <p className="text-xs text-gray-500 py-6 text-center flex items-center justify-center gap-2">
                 <Loader2 size={13} className="animate-spin" />Loading leads…
@@ -995,15 +1180,13 @@ export default function Tasks() {
               </p>
             )}
             {displayedLeads.map(lead => (
-              <LeadCard
-                key={lead.id}
-                lead={lead}
-                userPos={userPos}
-                onOpenDetail={setDetailLead}
-              />
+              <LeadCard key={lead.id} lead={lead} userPos={userPos} currentUser={user} onOpenDetail={setDetailLead} />
             ))}
           </div>
-        ) : (
+        )}
+
+        {/* ── Pool views (priority / nearby / initiated) ── */}
+        {!showLeads && !showClaimed && (
           <div className="space-y-2">
             {displayed.length === 0 && (
               <p className="text-xs text-gray-600 py-6 text-center">
@@ -1015,6 +1198,7 @@ export default function Tasks() {
                 key={`${opp.type || 'opp'}-${opp.id}`}
                 opp={opp}
                 userPos={userPos}
+                currentUser={user}
                 onClaim={claimProject}
                 claiming={claimingId === opp.id}
                 canDelete={isAdmin}

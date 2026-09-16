@@ -47,7 +47,7 @@ const taskChipSelect = {
   claimedAt: true,
   userId: true,
   taskTeam: true,
-  user: { select: { id: true, name: true, avatar: true } }
+  user: { select: { id: true, name: true, avatar: true, functionalTeam: true } }
 };
 
 // A full opportunity (project) with its claimable tasks.
@@ -226,6 +226,79 @@ router.get('/pool/claimed', authenticate, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// GET /tasks/pool/claimed/all
+// All claimed tasks across the entire team — visible to every authenticated user.
+// Groups by lead (or opportunity) and shows the claimer with their team name.
+// ---------------------------------------------------------------------------
+router.get('/pool/claimed/all', authenticate, async (req, res) => {
+  try {
+    // Claimed lead tasks (pooled = true, userId is set)
+    const leadTasks = await prisma.task.findMany({
+      where: { pooled: true, userId: { not: null }, leadId: { not: null } },
+      orderBy: [{ claimedAt: 'desc' }],
+      select: {
+        id: true,
+        title: true,
+        completed: true,
+        completedAt: true,
+        claimedAt: true,
+        taskTeam: true,
+        leadId: true,
+        userId: true,
+        user: { select: { id: true, name: true, avatar: true, functionalTeam: true } },
+        lead: {
+          select: {
+            id: true,
+            fullName: true,
+            company: true,
+            location: true,
+            priority: true,
+            files: {
+              where: { mimeType: { startsWith: 'image/' }, deletedAt: { isSet: false } },
+              select: { url: true },
+              take: 1
+            }
+          }
+        }
+      }
+    });
+
+    // Claimed opportunity tasks
+    const oppTasks = await prisma.task.findMany({
+      where: { pooled: true, userId: { not: null }, opportunityId: { not: null } },
+      orderBy: [{ claimedAt: 'desc' }],
+      select: {
+        id: true,
+        title: true,
+        completed: true,
+        completedAt: true,
+        claimedAt: true,
+        taskTeam: true,
+        opportunityId: true,
+        projectName: true,
+        photoUrl: true,
+        userId: true,
+        user: { select: { id: true, name: true, avatar: true, functionalTeam: true } },
+        opportunity: {
+          select: {
+            id: true,
+            projectName: true,
+            address: true,
+            priority: true,
+            photoUrl: true
+          }
+        }
+      }
+    });
+
+    res.json({ leadTasks, oppTasks });
+  } catch (err) {
+    console.error('pool/claimed/all error:', err);
+    res.status(500).json({ error: 'Failed to fetch all claimed tasks' });
+  }
+});
+
 router.get('/pool/all', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
     const opportunities = await prisma.opportunity.findMany({
@@ -250,13 +323,13 @@ const leadTaskSelect = {
   createdAt: true,
   userId: true,
   taskTeam: true,
-  user: { select: { id: true, name: true, avatar: true } }
+  user: { select: { id: true, name: true, avatar: true, functionalTeam: true } }
 };
 
 router.get('/leads', authenticate, async (req, res) => {
   try {
-    const teamFilter = taskTeamFilter(req.user);
-
+    // ALL tasks on every lead are visible to every authenticated user.
+    // Team filtering only applies to the pool (open/initiated) views.
     const leads = await prisma.lead.findMany({
       where: { deletedAt: { isSet: false } },
       orderBy: { createdAt: 'desc' },
@@ -279,7 +352,6 @@ router.get('/leads', authenticate, async (req, res) => {
         createdAt: true,
         assignedTo: { select: { id: true, name: true, avatar: true } },
         tasks: {
-          where: teamFilter ? { ...teamFilter } : undefined,
           select: leadTaskSelect,
           orderBy: [{ completed: 'asc' }, { createdAt: 'asc' }]
         },
@@ -403,17 +475,33 @@ router.delete('/lead-task/:id', authenticate, authorize('ADMIN'), async (req, re
   }
 });
 
-// Claim all unclaimed tasks on a lead.
+// Claim the tasks on a lead that belong to the current user's functional team.
+// If the user's team is ALL (or ADMIN), claim all unclaimed tasks.
+// This lets each team claim their own tasks independently.
 router.post('/lead/:leadId/claim', authenticate, async (req, res) => {
   try {
     const lead = await prisma.lead.findUnique({ where: { id: req.params.leadId } });
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-    const unclaimed = await prisma.task.count({ where: { leadId: lead.id, userId: null } });
-    if (unclaimed === 0) return res.status(409).json({ error: 'Lead already claimed' });
+    const ft = req.user.functionalTeam || 'ALL';
+    const isAllTeam = req.user.role === 'ADMIN' || ft === 'ALL';
+
+    // Build which tasks this user can claim: unclaimed + matching their team
+    const claimWhere = {
+      leadId: lead.id,
+      userId: null,
+      ...(isAllTeam ? {} : {
+        OR: [{ taskTeam: 'ALL' }, { taskTeam: ft }, { taskTeam: null }]
+      })
+    };
+
+    const unclaimed = await prisma.task.count({ where: claimWhere });
+    if (unclaimed === 0) {
+      return res.status(409).json({ error: 'No unclaimed tasks available for your team' });
+    }
 
     await prisma.task.updateMany({
-      where: { leadId: lead.id, userId: null },
+      where: claimWhere,
       data: { userId: req.user.id, claimedAt: new Date() }
     });
 
