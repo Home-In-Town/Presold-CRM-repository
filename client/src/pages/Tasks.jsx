@@ -300,13 +300,17 @@ function ClaimedGroup({ title, subtitle, photoUrl, initial, badge, badgeColor, t
 // ---------------------------------------------------------------------------
 // Lead Detail Modal
 // ---------------------------------------------------------------------------
-function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDeleteTask, onClaim, claiming }) {
+function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDeleteTask, onClaim, onClaimSelected, claiming }) {
   const [detail, setDetail]         = useState(null);
   const [loadingDetail, setLoading] = useState(true);
   const [adding, setAdding]         = useState(false);
   const [newTitle, setNewTitle]     = useState('');
   const [newTeam, setNewTeam]       = useState('ALL');
   const [savingAdd, setSavingAdd]   = useState(false);
+
+  // Per-task selection state
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [claimingSelected, setClaimingSelected] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -316,15 +320,39 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
     return () => { cancelled = true; };
   }, [lead.id]);
 
+  // Reset selections whenever tasks change (e.g. after a claim)
+  useEffect(() => { setSelectedIds(new Set()); }, [lead.tasks]);
+
   const tasks   = lead.tasks || [];
   const ft      = currentUser?.functionalTeam || 'ALL';
-  const isAdm   = currentUser?.role === 'ADMIN';
 
   // Tasks this user can still claim (unclaimed + matches their team)
   const claimableTasks = tasks.filter(t =>
     !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam)
   );
   const hasClaimable = claimableTasks.length > 0;
+  const allSelected  = claimableTasks.length > 0 && claimableTasks.every(t => selectedIds.has(t.id));
+
+  const toggleTask = (id) =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelectedIds(allSelected
+      ? new Set()
+      : new Set(claimableTasks.map(t => t.id))
+    );
+
+  const handleClaimSelected = async () => {
+    if (selectedIds.size === 0) return;
+    setClaimingSelected(true);
+    await onClaimSelected(lead.id, [...selectedIds]);
+    setClaimingSelected(false);
+    onClose();
+  };
 
   const submitAdd = async () => {
     const val = newTitle.trim();
@@ -438,12 +466,21 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
                 Tasks
                 {tasks.length > 0 && <span className="ml-1 text-gray-500 font-normal">({tasks.length})</span>}
               </p>
-              {isAdmin && !adding && (
-                <button onClick={() => setAdding(true)}
-                  className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200">
-                  <Plus size={11} />Add task
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {/* Select All toggle — only when there are claimable tasks */}
+                {hasClaimable && (
+                  <button onClick={toggleAll}
+                    className="text-[11px] text-brand-300 hover:text-brand-200 font-medium">
+                    {allSelected ? 'Deselect all' : 'Select all'}
+                  </button>
+                )}
+                {isAdmin && !adding && (
+                  <button onClick={() => setAdding(true)}
+                    className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200">
+                    <Plus size={11} />Add task
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Admin add-task */}
@@ -469,7 +506,7 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
               </div>
             )}
 
-            {/* Task list — ALL tasks shown to ALL users */}
+            {/* Task list — ALL tasks shown to ALL users, claimable ones have checkboxes */}
             {tasks.length === 0
               ? <p className="text-[11px] text-gray-600 py-1">No tasks yet{isAdmin ? '. Add one above.' : '.'}</p>
               : (
@@ -478,30 +515,50 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
                     const claimer = t.user;
                     const claimerTeam = claimer?.functionalTeam;
                     const claimerTeamMeta = TEAM_META[claimerTeam];
-                    const isMyClaim = t.userId === currentUser?.id;
-                    const iCanClaim = !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam);
+                    const isMyClaim  = t.userId === currentUser?.id;
+                    const iCanClaim  = !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam);
+                    const isChecked  = selectedIds.has(t.id);
 
                     return (
                       <div key={t.id}
-                        className={`flex items-start gap-2 rounded-xl px-3 py-2 ${
-                          isMyClaim ? 'bg-brand-600/10 border border-brand-500/20' : 'bg-dark-700/40'
+                        onClick={() => iCanClaim && toggleTask(t.id)}
+                        className={`flex items-start gap-2.5 rounded-xl px-3 py-2.5 transition-colors ${
+                          iCanClaim ? 'cursor-pointer' : ''
+                        } ${
+                          isChecked
+                            ? 'bg-brand-600/20 border border-brand-500/40'
+                            : isMyClaim
+                            ? 'bg-brand-600/10 border border-brand-500/20'
+                            : 'bg-dark-700/40 border border-transparent'
                         }`}>
-                        {/* Status dot */}
-                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${t.completed ? 'bg-green-400' : t.userId ? 'bg-brand-400' : 'bg-amber-400'}`} />
+
+                        {/* Checkbox for claimable tasks */}
+                        {iCanClaim ? (
+                          <div className={`w-4 h-4 rounded-md flex-shrink-0 mt-0.5 flex items-center justify-center border-2 transition-colors ${
+                            isChecked ? 'bg-brand-500 border-brand-500' : 'border-gray-500 bg-transparent'
+                          }`}>
+                            {isChecked && <Check size={10} className="text-white" strokeWidth={3} />}
+                          </div>
+                        ) : (
+                          /* Status dot for non-claimable tasks */
+                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-2 ${
+                            t.completed ? 'bg-green-400' : t.userId ? 'bg-brand-400' : 'bg-gray-600'
+                          }`} />
+                        )}
 
                         <div className="flex-1 min-w-0">
                           <p className={`text-xs font-medium leading-snug ${t.completed ? 'line-through text-gray-500' : 'text-white'}`}>
                             {t.title}
                           </p>
                           <div className="flex items-center flex-wrap gap-1.5 mt-1">
-                            {/* Team this task belongs to */}
                             <TeamBadge taskTeam={t.taskTeam} />
-
-                            {/* Claimed-by info */}
                             {claimer ? (
                               <span className="inline-flex items-center gap-1 text-[10px]">
                                 <Avatar user={claimer} size={4} />
-                                <span className="text-gray-400">{t.completed ? '✓ Done by' : 'By'} <span className="text-white font-medium">{claimer.name}</span></span>
+                                <span className="text-gray-400">
+                                  {t.completed ? '✓ Done by' : 'By'}{' '}
+                                  <span className="text-white font-medium">{claimer.name}</span>
+                                </span>
                                 {claimerTeam && claimerTeam !== 'ALL' && claimerTeamMeta && (
                                   <span className={`font-semibold ${claimerTeamMeta.color.split(' ').find(c => c.startsWith('text-'))}`}>
                                     · {claimerTeamMeta.label}
@@ -509,16 +566,19 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
                                 )}
                                 {isMyClaim && <span className="text-brand-400 font-semibold">(You)</span>}
                               </span>
+                            ) : iCanClaim ? (
+                              <span className="text-[10px] text-amber-400/80 font-medium">
+                                {isChecked ? 'Selected to claim' : 'Tap to select'}
+                              </span>
                             ) : (
-                              iCanClaim
-                                ? <span className="text-[10px] text-amber-400/80 font-medium">Available for your team</span>
-                                : <span className="text-[10px] text-gray-600">Unclaimed</span>
+                              <span className="text-[10px] text-gray-600">Unclaimed</span>
                             )}
                           </div>
                         </div>
 
                         {isAdmin && (
-                          <button onClick={() => onDeleteTask(lead.id, t.id)}
+                          <button
+                            onClick={e => { e.stopPropagation(); onDeleteTask(lead.id, t.id); }}
                             className="p-0.5 text-gray-600 hover:text-red-400 flex-shrink-0 mt-0.5">
                             <Trash2 size={11} />
                           </button>
@@ -572,13 +632,36 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
 
         {/* Footer — Claim button */}
         {hasClaimable ? (
-          <button
-            onClick={() => { onClaim(lead.id); onClose(); }}
-            disabled={claiming}
-            className="flex-shrink-0 w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-3.5 flex items-center justify-center gap-2 transition-colors border-t border-white/8">
-            {claiming ? <Loader2 size={14} className="animate-spin" /> : <Hand size={14} />}
-            {claiming ? 'Claiming…' : `Claim My Team's Task${claimableTasks.length > 1 ? 's' : ''} (${claimableTasks.length})`}
-          </button>
+          <div className="flex-shrink-0 border-t border-white/8">
+            {/* Selection summary bar */}
+            <div className="flex items-center justify-between px-3 py-2 bg-dark-700/40">
+              <span className="text-[11px] text-gray-400">
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} of ${claimableTasks.length} task${claimableTasks.length > 1 ? 's' : ''} selected`
+                  : `${claimableTasks.length} task${claimableTasks.length > 1 ? 's' : ''} available — tap to select`
+                }
+              </span>
+              {selectedIds.size > 0 && (
+                <button onClick={() => setSelectedIds(new Set())}
+                  className="text-[11px] text-gray-500 hover:text-gray-300">
+                  Clear
+                </button>
+              )}
+            </div>
+            {/* Claim selected button */}
+            <button
+              onClick={handleClaimSelected}
+              disabled={selectedIds.size === 0 || claimingSelected}
+              className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold py-3.5 flex items-center justify-center gap-2 transition-colors">
+              {claimingSelected ? <Loader2 size={14} className="animate-spin" /> : <Hand size={14} />}
+              {claimingSelected
+                ? 'Claiming…'
+                : selectedIds.size > 0
+                ? `Claim ${selectedIds.size} Selected Task${selectedIds.size > 1 ? 's' : ''}`
+                : 'Select tasks above to claim'
+              }
+            </button>
+          </div>
         ) : tasks.length > 0 ? (
           <div className="flex-shrink-0 w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-3 flex items-center justify-center gap-1.5 border-t border-white/8">
             <CheckCircle2 size={13} className="text-green-400" />
@@ -894,6 +977,20 @@ export default function Tasks() {
     setClaimingId(null);
   };
 
+  // Claim only the specific task IDs the user selected in the modal
+  const claimLeadSelected = async (leadId, taskIds) => {
+    try {
+      const res = await api.post(`/tasks/lead/${leadId}/claim-selected`, { taskIds });
+      setLeads(prev => resortLeads(prev.map(l => l.id === leadId ? { ...l, tasks: res.data.tasks } : l)));
+      setDetailLead(prev => prev?.id === leadId ? { ...prev, tasks: res.data.tasks } : prev);
+      loadPool();
+      toast.success(`${res.data.claimed} task${res.data.claimed > 1 ? 's' : ''} claimed 🙌`);
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Failed to claim selected tasks';
+      toast.error(msg);
+    }
+  };
+
   const deleteLeadTask = async (leadId, taskId) => {
     const remove = arr => arr.filter(t => t.id !== taskId);
     setLeads(prev => resortLeads(prev.map(l => l.id !== leadId ? l : { ...l, tasks: remove(l.tasks) })));
@@ -1034,6 +1131,7 @@ export default function Tasks() {
           onAddTasks={addLeadTasks}
           onDeleteTask={deleteLeadTask}
           onClaim={claimLead}
+          onClaimSelected={claimLeadSelected}
           claiming={claimingId === detailLead.id}
         />
       )}

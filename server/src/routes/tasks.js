@@ -517,6 +517,55 @@ router.post('/lead/:leadId/claim', authenticate, async (req, res) => {
   }
 });
 
+// Claim specific selected task IDs on a lead.
+// Body: { taskIds: string[] }
+router.post('/lead/:leadId/claim-selected', authenticate, async (req, res) => {
+  try {
+    const lead = await prisma.lead.findUnique({ where: { id: req.params.leadId } });
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const { taskIds } = req.body;
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one task to claim' });
+    }
+
+    const ft = req.user.functionalTeam || 'ALL';
+    const isAllTeam = req.user.role === 'ADMIN' || ft === 'ALL';
+
+    // Only claim tasks that: belong to this lead, are in the requested IDs,
+    // are unclaimed, and match the user's team.
+    const teamCond = isAllTeam ? {} : {
+      OR: [{ taskTeam: 'ALL' }, { taskTeam: ft }, { taskTeam: null }]
+    };
+
+    const claimWhere = {
+      id: { in: taskIds },
+      leadId: lead.id,
+      userId: null,
+      ...teamCond
+    };
+
+    const result = await prisma.task.updateMany({
+      where: claimWhere,
+      data: { userId: req.user.id, claimedAt: new Date() }
+    });
+
+    if (result.count === 0) {
+      return res.status(409).json({ error: 'No eligible tasks to claim (already claimed or team mismatch)' });
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { leadId: lead.id },
+      select: leadTaskSelect,
+      orderBy: [{ completed: 'asc' }, { createdAt: 'asc' }]
+    });
+    res.json({ leadId: lead.id, tasks, claimed: result.count });
+  } catch (err) {
+    console.error('Lead claim-selected error:', err);
+    res.status(500).json({ error: 'Failed to claim selected tasks' });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Create a personal task.
 // ---------------------------------------------------------------------------
