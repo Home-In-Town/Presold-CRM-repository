@@ -15,7 +15,7 @@ export const authenticate = async (req, res, next) => {
     try {
       user = await prisma.user.findUnique({
         where: { id: decoded.id },
-        select: { id: true, name: true, email: true, role: true, isActive: true, teamId: true, avatar: true }
+        select: { id: true, name: true, email: true, role: true, isActive: true, teamId: true, avatar: true, functionalTeam: true }
       });
     } catch (dbErr) {
       // Malformed ObjectId (e.g. old UUID from SQLite) — treat as invalid token

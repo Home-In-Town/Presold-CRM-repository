@@ -1,76 +1,421 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Plus, Trash2, Hand, Flag, Check,
-  MapPin, Navigation, Image as ImageIcon, Loader2, Star, ListChecks, Search, X
+  Plus, Trash2, Hand, Flag, Check, MapPin, Navigation,
+  Image as ImageIcon, Loader2, Star, ListChecks, Search, X,
+  Phone, Mail, Building2, ChevronRight, ArrowLeft,
+  ExternalLink, Users, Briefcase, UserCircle2
 } from 'lucide-react';
 import api, { resolveFileUrl } from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 const PRIORITY_STYLES = {
-  HIGH: 'bg-red-500/10 text-red-300 border-red-500/20',
+  HIGH:   'bg-red-500/10 text-red-300 border-red-500/20',
   MEDIUM: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
-  LOW: 'bg-sky-500/10 text-sky-300 border-sky-500/20'
+  LOW:    'bg-sky-500/10 text-sky-300 border-sky-500/20',
 };
 
 const TASK_OPTIONS = [
-  'Site visit',
-  'Property demo call',
-  'Shoot reel / video',
-  'Photo shoot',
-  'Collect documents',
-  'Client meeting',
-  'Follow-up visit',
-  'Handover / possession',
-  'Survey / inspection',
-  'Deliver brochure / proposal'
+  'Site visit', 'Property demo call', 'Shoot reel / video', 'Photo shoot',
+  'Collect documents', 'Client meeting', 'Follow-up visit',
+  'Handover / possession', 'Survey / inspection', 'Deliver brochure / proposal',
 ];
 
 const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
+// Keep in sync with server/src/routes/tasks.js TASK_TEAMS
+const TEAM_OPTIONS = [
+  { value: 'ALL',           label: 'All Teams',    short: 'All',     color: 'bg-gray-500/15 text-gray-300 border-gray-500/25'   },
+  { value: 'SALES_TEAM',   label: 'Sales Team',   short: 'Sales',   color: 'bg-brand-500/15 text-brand-300 border-brand-500/25' },
+  { value: 'B2B_SALES',    label: 'B2B Sales',    short: 'B2B',     color: 'bg-violet-500/15 text-violet-300 border-violet-500/25' },
+  { value: 'CONTENT_TEAM', label: 'Content Team', short: 'Content', color: 'bg-pink-500/15 text-pink-300 border-pink-500/25'   },
+];
+const TEAM_META = Object.fromEntries(TEAM_OPTIONS.map(t => [t.value, t]));
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 function distanceKm(lat1, lon1, lat2, lon2) {
-  const toRad = d => (d * Math.PI) / 180;
   const R = 6371;
+  const toRad = d => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
+  const a = Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
-
 function formatDistance(km) {
   if (km == null) return null;
-  if (km < 1) return `${Math.round(km * 1000)} m`;
-  return `${km.toFixed(1)} km`;
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
 }
 
+// ---------------------------------------------------------------------------
+// Shared small components
+// ---------------------------------------------------------------------------
 function PriorityBadge({ priority }) {
   const p = (priority || 'MEDIUM').toUpperCase();
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${PRIORITY_STYLES[p] || PRIORITY_STYLES.MEDIUM}`}>
-      <Flag size={8} /> {p}
+      <Flag size={8} />{p}
     </span>
   );
 }
 
-// Opportunity card — compact mobile-first
+// Coloured pill that shows which team a task belongs to
+function TeamBadge({ taskTeam }) {
+  const meta = TEAM_META[taskTeam];
+  if (!meta || taskTeam === 'ALL') return null;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${meta.color}`}>
+      <Users size={8} />{meta.short}
+    </span>
+  );
+}
+
+// Thin dropdown used by admin to pick a team when adding tasks
+function TeamSelect({ value, onChange, className = '' }) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className={`bg-dark-700/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40 ${className}`}
+    >
+      {TEAM_OPTIONS.map(t => (
+        <option key={t.value} value={t.value}>{t.label}</option>
+      ))}
+    </select>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Lead Detail Modal
+// Opens when any lead card is tapped.
+// Shows full lead info + tasks (with team badges) + recent notes + files.
+// ---------------------------------------------------------------------------
+function LeadDetailModal({ lead, onClose, isAdmin, onAddTasks, onDeleteTask, onClaim, claiming }) {
+  const [detail, setDetail]         = useState(null);
+  const [loadingDetail, setLoading] = useState(true);
+  const [adding, setAdding]         = useState(false);
+  const [newTitle, setNewTitle]     = useState('');
+  const [newTeam, setNewTeam]       = useState('ALL');
+  const [savingAdd, setSavingAdd]   = useState(false);
+
+  // Fetch full lead (notes, files, activities)
+  useEffect(() => {
+    let cancelled = false;
+    api.get(`/leads/${lead.id}`)
+      .then(r => { if (!cancelled) { setDetail(r.data); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [lead.id]);
+
+  const tasks     = lead.tasks || [];
+  const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
+  const claimable  = tasks.some(t => !t.userId);
+  const claimant   = tasks.find(t => t.user?.name)?.user?.name || null;
+
+  const submitAdd = async () => {
+    const val = newTitle.trim();
+    if (!val) return;
+    setSavingAdd(true);
+    // Pass task as object so server gets per-task team
+    await onAddTasks(lead.id, [{ title: val, taskTeam: newTeam }]);
+    setNewTitle(''); setNewTeam('ALL');
+    setSavingAdd(false); setAdding(false);
+  };
+
+  const TEMP_COLOR = { HOT: 'text-red-400', WARM: 'text-amber-400', COLD: 'text-sky-400' };
+
+  return (
+    <AnimatePresence>
+      {/* Backdrop */}
+      <motion.div
+        key="backdrop"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/70"
+        onClick={onClose}
+      />
+      {/* Sheet */}
+      <motion.div
+        key="sheet"
+        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+        className="fixed inset-x-0 bottom-0 z-50 flex flex-col bg-dark-800 rounded-t-2xl border-t border-white/8 shadow-2xl"
+        style={{ maxHeight: '92dvh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-2 pb-1 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-white/15" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center gap-2.5 px-3 pb-2.5 flex-shrink-0 border-b border-white/8">
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors flex-shrink-0">
+            <ArrowLeft size={16} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-white truncate">{lead.fullName}</p>
+            {(lead.company || lead.location) && (
+              <p className="text-[11px] text-gray-400 truncate">
+                {[lead.company, lead.location].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <PriorityBadge priority={lead.priority} />
+            {lead.temperature && (
+              <span className={`text-[10px] font-bold ${TEMP_COLOR[lead.temperature] || 'text-gray-400'}`}>
+                {lead.temperature}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 custom-scroll">
+
+          {/* ── Contact grid ── */}
+          <div className="p-3 grid grid-cols-2 gap-2">
+            {lead.phone && (
+              <a href={`tel:${lead.phone}`}
+                className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5 hover:bg-dark-700/80 transition-colors">
+                <Phone size={13} className="text-green-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Phone</p>
+                  <p className="text-xs text-white font-medium truncate">{lead.phone}</p>
+                </div>
+              </a>
+            )}
+            {(detail?.email || lead.email) && (
+              <a href={`mailto:${detail?.email || lead.email}`}
+                className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5 hover:bg-dark-700/80 transition-colors">
+                <Mail size={13} className="text-blue-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Email</p>
+                  <p className="text-xs text-white font-medium truncate">{detail?.email || lead.email}</p>
+                </div>
+              </a>
+            )}
+            {lead.company && (
+              <div className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5">
+                <Building2 size={13} className="text-brand-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Company</p>
+                  <p className="text-xs text-white font-medium truncate">{lead.company}</p>
+                </div>
+              </div>
+            )}
+            {lead.stage && (
+              <div className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5">
+                <ChevronRight size={13} className="text-amber-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Stage</p>
+                  <p className="text-xs text-white font-medium truncate">{lead.stage.replace(/_/g, ' ')}</p>
+                </div>
+              </div>
+            )}
+            {lead.budget && (
+              <div className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5">
+                <Briefcase size={13} className="text-emerald-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Budget</p>
+                  <p className="text-xs text-white font-medium truncate">{lead.budget}</p>
+                </div>
+              </div>
+            )}
+            {lead.source && (
+              <div className="flex items-center gap-2 bg-dark-700/50 rounded-xl px-3 py-2.5">
+                <UserCircle2 size={13} className="text-violet-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Source</p>
+                  <p className="text-xs text-white font-medium truncate">{lead.source.replace(/_/g, ' ')}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Assigned + map link row */}
+          <div className="flex items-center justify-between gap-2 px-3 pb-3">
+            {lead.assignedTo ? (
+              <div className="flex items-center gap-1.5">
+                {lead.assignedTo.avatar
+                  ? <img src={resolveFileUrl(lead.assignedTo.avatar)} className="w-5 h-5 rounded-full object-cover" alt="" />
+                  : <div className="w-5 h-5 rounded-full bg-brand-600/40 flex items-center justify-center text-[9px] font-bold text-brand-300">{lead.assignedTo.name[0]}</div>
+                }
+                <span className="text-[11px] text-gray-400">
+                  Assigned to <span className="text-white">{lead.assignedTo.name}</span>
+                </span>
+              </div>
+            ) : <span className="text-[11px] text-gray-600">Unassigned</span>}
+            {lead.locationLink && (
+              <a href={lead.locationLink} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200">
+                <MapPin size={11} />View map<ExternalLink size={10} />
+              </a>
+            )}
+          </div>
+
+          {/* ── Tasks section ── */}
+          <div className="border-t border-white/8 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-white">
+                Tasks
+                {tasks.length > 0 && <span className="ml-1 text-gray-500 font-normal">({tasks.length})</span>}
+              </p>
+              {isAdmin && !adding && (
+                <button onClick={() => setAdding(true)}
+                  className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200">
+                  <Plus size={11} />Add task
+                </button>
+              )}
+            </div>
+
+            {/* Admin add-task form */}
+            {isAdmin && adding && (
+              <div className="space-y-1.5 bg-dark-700/40 rounded-xl p-2.5">
+                <div className="flex gap-1.5">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newTitle}
+                    onChange={e => setNewTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
+                    placeholder="Task title…"
+                    className="flex-1 min-w-0 bg-dark-800/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
+                  />
+                  <button onClick={submitAdd} disabled={savingAdd || !newTitle.trim()}
+                    className="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-xl flex-shrink-0">
+                    {savingAdd ? <Loader2 size={11} className="animate-spin" /> : 'Add'}
+                  </button>
+                  <button onClick={() => { setAdding(false); setNewTitle(''); setNewTeam('ALL'); }}
+                    className="px-1 text-xs text-gray-400 flex-shrink-0">✕</button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-gray-500">Assign to team:</span>
+                  <TeamSelect value={newTeam} onChange={setNewTeam} />
+                </div>
+              </div>
+            )}
+
+            {/* Task list */}
+            {tasks.length === 0
+              ? <p className="text-[11px] text-gray-600 py-1">{isAdmin ? 'No tasks yet.' : 'No tasks for your team yet.'}</p>
+              : (
+                <div className="space-y-1.5">
+                  {tasks.map(t => (
+                    <div key={t.id} className="flex items-start gap-2 bg-dark-700/40 rounded-xl px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-medium leading-snug ${t.completed ? 'line-through text-gray-500' : 'text-white'}`}>
+                          {t.title}
+                        </p>
+                        <div className="flex items-center flex-wrap gap-1.5 mt-1">
+                          <TeamBadge taskTeam={t.taskTeam} />
+                          {t.user
+                            ? <span className="text-[10px] text-gray-500">{t.completed ? '✓' : '→'} {t.user.name}</span>
+                            : <span className="text-[10px] text-amber-500/70">Unclaimed</span>
+                          }
+                        </div>
+                      </div>
+                      {isAdmin && (
+                        <button onClick={() => onDeleteTask(lead.id, t.id)}
+                          className="p-0.5 text-gray-600 hover:text-red-400 flex-shrink-0 mt-0.5">
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          </div>
+
+          {/* ── Loading shimmer ── */}
+          {loadingDetail && (
+            <div className="border-t border-white/8 p-3 flex items-center gap-2 text-xs text-gray-500">
+              <Loader2 size={12} className="animate-spin" />Loading details…
+            </div>
+          )}
+
+          {/* ── Recent notes ── */}
+          {!loadingDetail && detail?.notes?.length > 0 && (
+            <div className="border-t border-white/8 p-3 space-y-2">
+              <p className="text-xs font-semibold text-white">Recent Notes</p>
+              {detail.notes.slice(0, 3).map(n => (
+                <div key={n.id} className="bg-dark-700/40 rounded-xl px-3 py-2">
+                  <p className="text-[11px] text-gray-200 leading-relaxed">{n.content}</p>
+                  <p className="text-[10px] text-gray-600 mt-1">{new Date(n.createdAt).toLocaleDateString()}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── File thumbnails ── */}
+          {!loadingDetail && detail?.files?.length > 0 && (
+            <div className="border-t border-white/8 p-3 space-y-2">
+              <p className="text-xs font-semibold text-white">Files</p>
+              <div className="flex gap-2 overflow-x-auto pb-1 custom-scroll">
+                {detail.files.slice(0, 8).map((f, i) => (
+                  <div key={f.id || i} className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-dark-700/60">
+                    {f.mimeType?.startsWith('image/')
+                      ? <img src={resolveFileUrl(f.url)} alt={f.name} className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={20} className="text-gray-600" /></div>
+                    }
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="h-4" />
+        </div>
+
+        {/* ── Footer — Claim button ── */}
+        {tasks.length > 0 && (
+          allClaimed
+            ? (
+              <div className="flex-shrink-0 w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-3 flex items-center justify-center gap-1.5 border-t border-white/8">
+                <Check size={12} className="text-green-400" />
+                Claimed{claimant ? ` by ${claimant}` : ''}
+              </div>
+            ) : (
+              <button
+                onClick={() => { onClaim(lead.id); onClose(); }}
+                disabled={claiming || !claimable}
+                className="flex-shrink-0 w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-sm font-bold py-3.5 flex items-center justify-center gap-2 transition-colors border-t border-white/8"
+              >
+                {claiming ? <Loader2 size={14} className="animate-spin" /> : <Hand size={14} />}
+                {claiming ? 'Claiming…' : tasks.length > 1 ? 'Claim All Tasks' : 'Claim Task'}
+              </button>
+            )
+        )}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Opportunity card
+// ---------------------------------------------------------------------------
 function OpportunityCard({ opp, userPos, onClaim, claiming, canDelete, onDelete }) {
   const dist = useMemo(() => {
     if (!userPos || opp.latitude == null || opp.longitude == null) return null;
     return distanceKm(userPos.lat, userPos.lng, opp.latitude, opp.longitude);
   }, [userPos, opp.latitude, opp.longitude]);
 
-  const tasks = opp.tasks || [];
+  const tasks      = opp.tasks || [];
   const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
-  const claimant = tasks.find(t => t.user?.name)?.user?.name || null;
+  const claimant   = tasks.find(t => t.user?.name)?.user?.name || null;
 
   return (
     <div className="glass-card overflow-hidden w-full">
-      {/* Header row */}
+      {/* Header */}
       <div className="flex gap-2 p-2.5">
-        {/* Thumbnail */}
         <div className="relative w-12 h-12 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
           {opp.photoUrl
             ? <img src={resolveFileUrl(opp.photoUrl)} alt={opp.projectName} className="w-full h-full object-cover" />
@@ -79,8 +424,6 @@ function OpportunityCard({ opp, userPos, onClaim, claiming, canDelete, onDelete 
             {opp.type === 'lead' ? 'Lead' : 'Opp'}
           </span>
         </div>
-
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-1">
             <p className="text-xs font-bold text-white leading-snug break-words flex-1 min-w-0">{opp.projectName}</p>
@@ -95,29 +438,34 @@ function OpportunityCard({ opp, userPos, onClaim, claiming, canDelete, onDelete 
             <PriorityBadge priority={opp.priority} />
             {dist != null && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-brand-300">
-                <Navigation size={10} /> {formatDistance(dist)}
+                <Navigation size={10} />{formatDistance(dist)}
               </span>
             )}
             {opp.locationLink && (
               <a href={opp.locationLink} target="_blank" rel="noreferrer"
                 className="inline-flex items-center gap-0.5 text-[10px] text-brand-300 hover:text-brand-200">
-                <MapPin size={10} /> View
+                <MapPin size={10} />View
               </a>
             )}
           </div>
         </div>
       </div>
 
-      {/* Task chips — scrollable */}
+      {/* Task chips — coloured by team */}
       {tasks.length > 0 && (
         <div className="px-2.5 pb-2 overflow-x-auto custom-scroll">
           <div className="flex gap-1 w-max">
-            {tasks.map(t => (
-              <span key={t.id}
-                className="flex-shrink-0 rounded-full border border-white/10 bg-dark-700/50 px-2 py-0.5 text-[10px] text-gray-200 whitespace-nowrap">
-                {t.title}
-              </span>
-            ))}
+            {tasks.map(t => {
+              const meta = TEAM_META[t.taskTeam] || TEAM_META['ALL'];
+              const hasTeam = t.taskTeam && t.taskTeam !== 'ALL';
+              return (
+                <span key={t.id}
+                  className={`flex-shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${hasTeam ? meta.color : 'bg-dark-700/50 border-white/10 text-gray-200'}`}>
+                  {hasTeam && <Users size={8} className="flex-shrink-0" />}
+                  {t.title}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
@@ -139,36 +487,27 @@ function OpportunityCard({ opp, userPos, onClaim, claiming, canDelete, onDelete 
   );
 }
 
-// Lead card — compact mobile-first
-function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, claiming }) {
-  const [adding, setAdding] = useState(false);
-  const [newTask, setNewTask] = useState('');
-  const [savingAdd, setSavingAdd] = useState(false);
-
+// ---------------------------------------------------------------------------
+// Lead card — compact row, tap opens detail modal
+// ---------------------------------------------------------------------------
+function LeadCard({ lead, userPos, onOpenDetail }) {
   const dist = useMemo(() => {
     if (!userPos || lead.latitude == null || lead.longitude == null) return null;
     return distanceKm(userPos.lat, userPos.lng, lead.latitude, lead.longitude);
   }, [userPos, lead.latitude, lead.longitude]);
 
-  const tasks = lead.tasks || [];
-  const claimable = tasks.some(t => !t.userId);
+  const tasks      = lead.tasks || [];
   const allClaimed = tasks.length > 0 && tasks.every(t => !!t.userId);
-  const claimant = tasks.find(t => t.user?.name)?.user?.name || null;
-  const photoUrl = lead.files?.[0]?.url ? resolveFileUrl(lead.files[0].url) : null;
+  const photoUrl   = lead.files?.[0]?.url ? resolveFileUrl(lead.files[0].url) : null;
 
-  const submitAdd = async () => {
-    const val = newTask.trim();
-    if (!val) return;
-    setSavingAdd(true);
-    await onAddTasks(lead.id, [val]);
-    setNewTask('');
-    setSavingAdd(false);
-    setAdding(false);
-  };
+  // Distinct teams represented in this lead's tasks
+  const teamTags = [...new Set(tasks.map(t => t.taskTeam).filter(t => t && t !== 'ALL'))];
 
   return (
-    <div className="glass-card overflow-hidden w-full">
-      {/* Header row */}
+    <div
+      className="glass-card overflow-hidden w-full cursor-pointer active:scale-[0.99] transition-transform"
+      onClick={() => onOpenDetail(lead)}
+    >
       <div className="flex gap-2 p-2.5">
         {/* Avatar */}
         <div className="relative w-12 h-12 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
@@ -182,7 +521,10 @@ function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, c
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-white leading-snug break-words">{lead.fullName}</p>
+          <div className="flex items-start gap-1">
+            <p className="text-xs font-bold text-white leading-snug break-words flex-1 min-w-0">{lead.fullName}</p>
+            <ChevronRight size={14} className="text-gray-600 flex-shrink-0 mt-0.5" />
+          </div>
           {(lead.company || lead.location) && (
             <p className="text-[11px] text-gray-400 truncate mt-0.5">
               {[lead.company, lead.location].filter(Boolean).join(' · ')}
@@ -192,147 +534,138 @@ function LeadCard({ lead, userPos, isAdmin, onAddTasks, onDeleteTask, onClaim, c
             <PriorityBadge priority={lead.priority} />
             {dist != null && (
               <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-300">
-                <Navigation size={10} /> {formatDistance(dist)}
+                <Navigation size={10} />{formatDistance(dist)}
               </span>
             )}
             {lead.locationLink && (
               <a href={lead.locationLink} target="_blank" rel="noreferrer"
+                onClick={e => e.stopPropagation()}
                 className="inline-flex items-center gap-0.5 text-[10px] text-brand-300 hover:text-brand-200">
-                <MapPin size={10} /> View
+                <MapPin size={10} />View
               </a>
             )}
           </div>
         </div>
       </div>
 
-      {/* Task chips + admin controls */}
-      <div className="px-2.5 pb-2">
-        {tasks.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {tasks.map(t => (
-              <span key={t.id}
-                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-dark-700/50 px-2 py-0.5 text-[10px] text-gray-200">
-                {t.title}
-                {isAdmin && (
-                  <button onClick={() => onDeleteTask(lead.id, t.id)} className="text-gray-500 hover:text-red-400 flex-shrink-0">
-                    <Trash2 size={9} />
-                  </button>
-                )}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {isAdmin && (
-          adding ? (
-            <div className="flex gap-1.5">
-              <input
-                autoFocus
-                type="text"
-                value={newTask}
-                onChange={e => setNewTask(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
-                placeholder="Task name…"
-                className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
-              />
-              <button onClick={submitAdd} disabled={savingAdd || !newTask.trim()}
-                className="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0">
-                {savingAdd ? <Loader2 size={11} className="animate-spin" /> : 'Add'}
-              </button>
-              <button onClick={() => { setAdding(false); setNewTask(''); }}
-                className="px-1.5 text-xs text-gray-400 flex-shrink-0">✕</button>
-            </div>
-          ) : (
-            <button onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200">
-              <Plus size={11} /> Add task
-            </button>
-          )
-        )}
-      </div>
-
-      {/* Footer */}
+      {/* Task summary chips — scrollable, coloured by team */}
       {tasks.length > 0 && (
-        allClaimed ? (
-          <div className="w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-2 flex items-center justify-center gap-1.5">
-            <Check size={12} className="text-green-400" />
-            Claimed{claimant ? ` by ${claimant}` : ''}
+        <div className="px-2.5 pb-2 overflow-x-auto custom-scroll" onClick={e => e.stopPropagation()}>
+          <div className="flex gap-1 w-max">
+            {tasks.map(t => {
+              const meta   = TEAM_META[t.taskTeam] || TEAM_META['ALL'];
+              const hasTeam = t.taskTeam && t.taskTeam !== 'ALL';
+              return (
+                <span key={t.id}
+                  className={`flex-shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${hasTeam ? meta.color : 'bg-dark-700/50 border-white/10 text-gray-200'}`}>
+                  {hasTeam && <Users size={8} className="flex-shrink-0" />}
+                  {t.title}
+                </span>
+              );
+            })}
           </div>
-        ) : (
-          <button onClick={() => onClaim(lead.id)} disabled={claiming || !claimable}
-            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 transition-colors">
-            {claiming ? <Loader2 size={13} className="animate-spin" /> : <Hand size={13} />}
-            {claiming ? 'Claiming…' : tasks.length > 1 ? 'Claim Tasks' : 'Claim Task'}
-          </button>
-        )
+        </div>
       )}
+
+      {/* Claimed / task count footer */}
+      {allClaimed ? (
+        <div className="w-full bg-dark-700/60 text-gray-400 text-[11px] font-semibold py-1.5 flex items-center justify-center gap-1.5">
+          <Check size={11} className="text-green-400" />
+          Claimed
+        </div>
+      ) : tasks.length > 0 ? (
+        <div className="w-full bg-brand-600/10 text-brand-300 text-[11px] font-semibold py-1.5 flex items-center justify-center gap-1.5">
+          <Hand size={11} />{tasks.length} task{tasks.length > 1 ? 's' : ''} · tap to claim
+        </div>
+      ) : null}
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main Tasks page
+// ---------------------------------------------------------------------------
 export default function Tasks() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin  = user?.role === 'ADMIN';
 
-  const [tab, setTab] = useState('all');
-  const [openPool, setOpenPool] = useState([]);
+  const [tab, setTab]                   = useState('all');
+  const [openPool, setOpenPool]         = useState([]);
   const [initiatedPool, setInitiatedPool] = useState([]);
-  const [claimingId, setClaimingId] = useState(null);
+  const [claimingId, setClaimingId]     = useState(null);
 
-  const [leads, setLeads] = useState([]);
+  const [leads, setLeads]               = useState([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
-  const [leadSearch, setLeadSearch] = useState('');
+  const [leadSearch, setLeadSearch]     = useState('');
+  const [detailLead, setDetailLead]     = useState(null); // open modal for this lead
 
-  const [userPos, setUserPos] = useState(null);
-  const [geoStatus, setGeoStatus] = useState('idle');
+  const [userPos, setUserPos]           = useState(null);
+  const [geoStatus, setGeoStatus]       = useState('idle');
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ projectName: '', address: '', priority: 'MEDIUM', locationLink: '' });
-  const [selectedTasks, setSelectedTasks] = useState([]);
-  const [customTasks, setCustomTasks] = useState([]);
-  const [customInput, setCustomInput] = useState('');
-  const [photoFile, setPhotoFile] = useState(null);
+  // Admin create-opportunity form
+  const [showCreate, setShowCreate]     = useState(false);
+  const [form, setForm]                 = useState({ projectName: '', address: '', priority: 'MEDIUM', locationLink: '' });
+  const [taskRows, setTaskRows]         = useState([{ title: '', taskTeam: 'ALL' }]); // per-task rows
+  const [photoFile, setPhotoFile]       = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const fileInputRef = useRef(null);
+  const [submitting, setSubmitting]     = useState(false);
+  const fileInputRef                    = useRef(null);
 
-  useEffect(() => {
-    loadPool();
-    loadLeads();
-    requestLocation();
-  }, []);
+  useEffect(() => { loadPool(); loadLeads(); requestLocation(); }, []);
+  useEffect(() => { if (tab === 'all') loadLeads(); }, [tab]);
 
-  useEffect(() => {
-    if (tab === 'all') loadLeads();
-  }, [tab]);
-
+  // ── Data loaders ──────────────────────────────────────────────────────────
   const loadLeads = async () => {
     setLeadsLoading(true);
     try {
       const res = await api.get('/tasks/leads');
       setLeads(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      toast.error('Failed to load leads');
-    }
+    } catch { toast.error('Failed to load leads'); }
     setLeadsLoading(false);
   };
 
-  const resortLeads = (list) => {
-    const withState = list.map(l => ({ ...l, hasTasks: (l.tasks?.length || 0) > 0 }));
-    return withState.sort((a, b) => {
-      if (a.hasTasks !== b.hasTasks) return a.hasTasks ? -1 : 1;
-      return new Date(b.createdAt) - new Date(a.createdAt);
-    });
+  const loadPool = async () => {
+    try {
+      const [open, initiated] = await Promise.all([
+        api.get('/tasks/pool/open'),
+        api.get('/tasks/pool/initiated'),
+      ]);
+      setOpenPool(open.data);
+      setInitiatedPool(initiated.data);
+    } catch {}
   };
 
-  const addLeadTasks = async (leadId, titles) => {
+  const requestLocation = () => {
+    if (!('geolocation' in navigator)) { setGeoStatus('unsupported'); return; }
+    setGeoStatus('locating');
+    navigator.geolocation.getCurrentPosition(
+      pos => { setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoStatus('ready'); },
+      () => setGeoStatus('denied'),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
+  // ── Lead helpers ─────────────────────────────────────────────────────────
+  const resortLeads = list =>
+    [...list].sort((a, b) => {
+      const aHas = (a.tasks?.length || 0) > 0;
+      const bHas = (b.tasks?.length || 0) > 0;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+  const addLeadTasks = async (leadId, entries) => {
+    // entries: array of { title, taskTeam } objects OR plain strings (fallback)
+    const normalised = entries.map(e =>
+      typeof e === 'string' ? { title: e, taskTeam: 'ALL' } : e
+    );
     try {
-      const res = await api.post(`/tasks/lead/${leadId}`, { titles });
+      const res = await api.post(`/tasks/lead/${leadId}`, { titles: normalised });
       setLeads(prev => resortLeads(prev.map(l => l.id === leadId ? { ...l, tasks: res.data.tasks } : l)));
-      toast.success('Task added to lead');
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to add task');
-    }
+      // Refresh the modal's lead data too
+      setDetailLead(prev => prev && prev.id === leadId ? { ...prev, tasks: res.data.tasks } : prev);
+      toast.success('Task added');
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to add task'); }
   };
 
   const claimLead = async (leadId) => {
@@ -343,12 +676,8 @@ export default function Tasks() {
       loadPool();
       toast.success('Lead claimed 🙌');
     } catch (err) {
-      if (err.response?.status === 409) {
-        toast.error('Lead already claimed');
-        loadLeads();
-      } else {
-        toast.error('Failed to claim lead');
-      }
+      if (err.response?.status === 409) { toast.error('Already claimed'); loadLeads(); }
+      else toast.error('Failed to claim lead');
     }
     setClaimingId(null);
   };
@@ -357,99 +686,15 @@ export default function Tasks() {
     setLeads(prev => resortLeads(prev.map(l =>
       l.id !== leadId ? l : { ...l, tasks: l.tasks.filter(t => t.id !== taskId) }
     )));
-    try {
-      await api.delete(`/tasks/lead-task/${taskId}`);
-    } catch {
-      toast.error('Failed to delete task');
-      loadLeads();
-    }
-  };
-
-  const requestLocation = () => {
-    if (!('geolocation' in navigator)) { setGeoStatus('unsupported'); return; }
-    setGeoStatus('locating');
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGeoStatus('ready');
-      },
-      () => setGeoStatus('denied'),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    setDetailLead(prev => prev && prev.id === leadId
+      ? { ...prev, tasks: prev.tasks.filter(t => t.id !== taskId) }
+      : prev
     );
+    try { await api.delete(`/tasks/lead-task/${taskId}`); }
+    catch { toast.error('Failed to delete task'); loadLeads(); }
   };
 
-  const loadPool = async () => {
-    try {
-      const [open, initiated] = await Promise.all([
-        api.get('/tasks/pool/open'),
-        api.get('/tasks/pool/initiated')
-      ]);
-      setOpenPool(open.data);
-      setInitiatedPool(initiated.data);
-    } catch {}
-  };
-
-  const onPhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
-  };
-
-  const toggleTaskOption = (opt) =>
-    setSelectedTasks(prev => prev.includes(opt) ? prev.filter(t => t !== opt) : [...prev, opt]);
-
-  const addCustomTask = () => {
-    const val = customInput.trim();
-    if (!val) return;
-    setCustomTasks(prev => prev.includes(val) ? prev : [...prev, val]);
-    setCustomInput('');
-  };
-
-  const removeCustomTask = (val) => setCustomTasks(prev => prev.filter(t => t !== val));
-
-  const submitPoolTask = async (e) => {
-    e.preventDefault();
-    if (!form.projectName.trim()) { toast.error('Project / site name is required'); return; }
-    const titles = [...selectedTasks, ...customTasks];
-    if (customInput.trim() && !titles.includes(customInput.trim())) titles.push(customInput.trim());
-    if (titles.length === 0) { toast.error('Pick at least one task or type a custom one'); return; }
-
-    setSubmitting(true);
-    try {
-      const hadLink = !!form.locationLink.trim();
-      const fd = new FormData();
-      fd.append('projectName', form.projectName.trim());
-      if (form.address.trim()) fd.append('address', form.address.trim());
-      fd.append('titles', JSON.stringify(titles));
-      fd.append('priority', form.priority);
-      if (form.locationLink.trim()) fd.append('locationLink', form.locationLink.trim());
-      if (photoFile) fd.append('photo', photoFile);
-
-      const res = await api.post('/tasks/pool', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      const opp = res.data;
-
-      setOpenPool([opp, ...openPool]);
-      setForm({ projectName: '', address: '', priority: 'MEDIUM', locationLink: '' });
-      setSelectedTasks([]);
-      setCustomTasks([]);
-      setCustomInput('');
-      setPhotoFile(null);
-      setPhotoPreview('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      setShowCreate(false);
-
-      const n = opp.tasks?.length || 0;
-      toast.success(n === 1 ? 'Opportunity added to pool' : `Project added with ${n} tasks`);
-      if (hadLink && (opp.latitude == null || opp.longitude == null)) {
-        toast('Couldn\'t read coordinates from that link — distance won\'t show.', { icon: '📍', duration: 6000 });
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to add opportunity');
-    }
-    setSubmitting(false);
-  };
-
+  // ── Pool claim / delete ───────────────────────────────────────────────────
   const claimProject = async (card) => {
     setClaimingId(card.id);
     const url = card.type === 'lead'
@@ -460,12 +705,8 @@ export default function Tasks() {
       await Promise.all([loadPool(), loadLeads()]);
       toast.success(card.type === 'lead' ? 'Lead claimed 🙌' : 'Project claimed 🙌');
     } catch (err) {
-      if (err.response?.status === 409) {
-        toast.error('Already claimed');
-        await loadPool();
-      } else {
-        toast.error('Failed to claim');
-      }
+      if (err.response?.status === 409) { toast.error('Already claimed'); await loadPool(); }
+      else toast.error('Failed to claim');
     }
     setClaimingId(null);
   };
@@ -479,32 +720,71 @@ export default function Tasks() {
         await api.delete(`/tasks/pool/opportunity/${card.id}`);
         toast.success('Project deleted');
       }
-      setOpenPool(openPool.filter(o => o.id !== card.id));
-      setInitiatedPool(initiatedPool.filter(o => o.id !== card.id));
+      setOpenPool(prev => prev.filter(o => o.id !== card.id));
+      setInitiatedPool(prev => prev.filter(o => o.id !== card.id));
       loadLeads();
     } catch { toast.error('Failed to delete'); }
   };
 
-  const withDistance = (list) => list.map(o => {
-    const d = (userPos && o.latitude != null && o.longitude != null)
+  // ── Admin create-opportunity form ─────────────────────────────────────────
+  const onPhotoChange = e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  };
+
+  const updateTaskRow = (idx, field, val) =>
+    setTaskRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r));
+
+  const addTaskRow = () => setTaskRows(prev => [...prev, { title: '', taskTeam: 'ALL' }]);
+  const removeTaskRow = idx => setTaskRows(prev => prev.filter((_, i) => i !== idx));
+
+  const submitPoolTask = async e => {
+    e.preventDefault();
+    if (!form.projectName.trim()) { toast.error('Project / site name is required'); return; }
+    const validRows = taskRows.filter(r => r.title.trim());
+    if (validRows.length === 0) { toast.error('Add at least one task'); return; }
+
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append('projectName', form.projectName.trim());
+      if (form.address.trim()) fd.append('address', form.address.trim());
+      fd.append('titles',    JSON.stringify(validRows.map(r => r.title.trim())));
+      fd.append('taskTeams', JSON.stringify(validRows.map(r => r.taskTeam)));
+      fd.append('priority',  form.priority);
+      if (form.locationLink.trim()) fd.append('locationLink', form.locationLink.trim());
+      if (photoFile) fd.append('photo', photoFile);
+
+      const res = await api.post('/tasks/pool', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setOpenPool(prev => [res.data, ...prev]);
+      setForm({ projectName: '', address: '', priority: 'MEDIUM', locationLink: '' });
+      setTaskRows([{ title: '', taskTeam: 'ALL' }]);
+      setPhotoFile(null); setPhotoPreview('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setShowCreate(false);
+      toast.success(`Project added with ${res.data.tasks?.length || 0} task(s)`);
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to add opportunity'); }
+    setSubmitting(false);
+  };
+
+  // ── Derived display lists ─────────────────────────────────────────────────
+  const withDist = list => list.map(o => ({
+    ...o,
+    _dist: (userPos && o.latitude != null && o.longitude != null)
       ? distanceKm(userPos.lat, userPos.lng, o.latitude, o.longitude)
-      : null;
-    return { ...o, _dist: d };
-  });
+      : null
+  }));
 
   const displayed = useMemo(() => {
     if (tab === 'initiated') return initiatedPool;
-    const open = withDistance(openPool);
-    if (tab === 'nearby') {
-      return [...open].sort((a, b) => {
-        if (a._dist == null) return 1;
-        if (b._dist == null) return -1;
-        return a._dist - b._dist;
-      });
-    }
-    return [...open].sort((a, b) =>
-      (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1)
-    );
+    const open = withDist(openPool);
+    if (tab === 'nearby') return [...open].sort((a, b) => {
+      if (a._dist == null) return 1; if (b._dist == null) return -1;
+      return a._dist - b._dist;
+    });
+    return [...open].sort((a, b) => (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1));
   }, [tab, openPool, initiatedPool, userPos]);
 
   const displayedLeads = useMemo(() => {
@@ -516,9 +796,9 @@ export default function Tasks() {
           return hay.includes(q);
         })
       : leads;
-    const hasTasks = l => (l.tasks?.length || 0) > 0;
     const distOf = l => (userPos && l.latitude != null && l.longitude != null)
       ? distanceKm(userPos.lat, userPos.lng, l.latitude, l.longitude) : Infinity;
+    const hasTasks = l => (l.tasks?.length || 0) > 0;
     return [...filtered].sort((a, b) => {
       const ha = hasTasks(a), hb = hasTasks(b);
       if (ha !== hb) return ha ? -1 : 1;
@@ -528,14 +808,28 @@ export default function Tasks() {
   }, [leads, userPos, leadSearch]);
 
   const TABS = [
-    { key: 'priority', label: 'Priority', icon: Star },
-    { key: 'nearby', label: 'Nearby', icon: MapPin },
-    { key: 'initiated', label: 'Initiated', icon: ListChecks }
+    { key: 'priority', label: 'Priority',  icon: Star },
+    { key: 'nearby',   label: 'Nearby',    icon: MapPin },
+    { key: 'initiated',label: 'Initiated', icon: ListChecks },
   ];
   const showLeads = tab === 'all';
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="w-full max-w-2xl mx-auto space-y-3 pb-10">
+
+      {/* Lead detail modal */}
+      {detailLead && (
+        <LeadDetailModal
+          lead={detailLead}
+          onClose={() => setDetailLead(null)}
+          isAdmin={isAdmin}
+          onAddTasks={addLeadTasks}
+          onDeleteTask={deleteLeadTask}
+          onClaim={claimLead}
+          claiming={claimingId === detailLead.id}
+        />
+      )}
 
       {/* Page heading */}
       <div className="flex items-center justify-between gap-2">
@@ -545,116 +839,86 @@ export default function Tasks() {
             onClick={() => setShowCreate(v => !v)}
             className="flex-shrink-0 flex items-center gap-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-xl transition-colors"
           >
-            <Plus size={13} /> New Opportunity
+            <Plus size={13} />New Opportunity
           </button>
         )}
       </div>
 
-      {/* Admin create form */}
+      {/* ── Admin create-opportunity form ── */}
       {isAdmin && showCreate && (
         <form onSubmit={submitPoolTask} className="glass-card p-3 space-y-2.5">
           <p className="text-xs font-semibold text-white">Add opportunity to team pool</p>
 
-          <input
-            type="text"
-            value={form.projectName}
+          <input type="text" value={form.projectName}
             onChange={e => setForm({ ...form, projectName: e.target.value })}
-            placeholder="Project / site name *"
-            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
-            required
-          />
-          <input
-            type="text"
-            value={form.address}
+            placeholder="Project / site name *" required
+            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
+
+          <input type="text" value={form.address}
             onChange={e => setForm({ ...form, address: e.target.value })}
             placeholder="Address / area"
-            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
-          />
+            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
 
-          {/* Task options */}
-          <div>
-            <p className="text-[10px] font-medium text-gray-400 mb-1">
-              Tasks (select one or more)
-              {(selectedTasks.length + customTasks.length) > 0 && (
-                <span className="text-brand-300"> · {selectedTasks.length + customTasks.length} selected</span>
-              )}
+          {/* Per-task rows: title + team */}
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-gray-400 font-medium">
+              Tasks <span className="text-gray-600">(assign a team to each)</span>
             </p>
-            <div className="max-h-32 overflow-y-auto rounded-xl border border-white/10 bg-dark-700/30 p-1.5 space-y-0.5 custom-scroll">
-              {TASK_OPTIONS.map(opt => {
-                const selected = selectedTasks.includes(opt);
-                return (
-                  <button key={opt} type="button" onClick={() => toggleTaskOption(opt)}
-                    className={`w-full flex items-center gap-2 text-left text-xs rounded-lg px-2.5 py-1.5 transition-colors ${
-                      selected ? 'bg-brand-600/20 text-brand-100 border border-brand-500/40' : 'text-gray-300 hover:bg-white/5 border border-transparent'
-                    }`}>
-                    <span className={`w-3.5 h-3.5 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
-                      selected ? 'bg-brand-500 border-brand-500' : 'border-gray-500'
-                    }`}>
-                      {selected && <Check size={9} className="text-white" strokeWidth={3} />}
-                    </span>
-                    {opt}
+            {taskRows.map((row, idx) => (
+              <div key={idx} className="flex gap-1.5 items-center">
+                <input
+                  type="text"
+                  value={row.title}
+                  onChange={e => updateTaskRow(idx, 'title', e.target.value)}
+                  placeholder={`Task ${idx + 1}…`}
+                  className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
+                />
+                <TeamSelect
+                  value={row.taskTeam}
+                  onChange={val => updateTaskRow(idx, 'taskTeam', val)}
+                  className="flex-shrink-0"
+                />
+                {taskRows.length > 1 && (
+                  <button type="button" onClick={() => removeTaskRow(idx)}
+                    className="p-1 text-gray-600 hover:text-red-400 flex-shrink-0">
+                    <X size={13} />
                   </button>
-                );
-              })}
-              {customTasks.map(ct => (
-                <div key={ct} className="w-full flex items-center gap-2 text-xs rounded-lg px-2.5 py-1.5 bg-brand-600/20 text-brand-100 border border-brand-500/40">
-                  <span className="w-3.5 h-3.5 rounded flex-shrink-0 flex items-center justify-center bg-brand-500 border border-brand-500">
-                    <Check size={9} className="text-white" strokeWidth={3} />
-                  </span>
-                  <span className="flex-1 min-w-0 truncate">{ct}</span>
-                  <button type="button" onClick={() => removeCustomTask(ct)}
-                    className="text-gray-400 hover:text-red-300 flex-shrink-0"><Trash2 size={10} /></button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-1.5 mt-1.5">
-              <input
-                type="text"
-                value={customInput}
-                onChange={e => setCustomInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTask(); } }}
-                placeholder="Custom task…"
-                className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
-              />
-              <button type="button" onClick={addCustomTask} disabled={!customInput.trim()}
-                className="flex-shrink-0 flex items-center gap-1 bg-dark-600 hover:bg-dark-500 border border-white/5 text-gray-300 text-xs font-medium px-2.5 py-1.5 rounded-xl disabled:opacity-50">
-                <Plus size={12} /> Add
-              </button>
-            </div>
+                )}
+              </div>
+            ))}
+            <button type="button" onClick={addTaskRow}
+              className="inline-flex items-center gap-1 text-[11px] text-brand-300 hover:text-brand-200">
+              <Plus size={11} />Add another task
+            </button>
           </div>
 
           <div className="flex gap-2">
             <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
-              className="flex-1 min-w-0 bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
+              className="flex-1 bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40">
               <option value="HIGH">High priority</option>
               <option value="MEDIUM">Medium priority</option>
               <option value="LOW">Low priority</option>
             </select>
           </div>
 
-          <input
-            type="url"
-            value={form.locationLink}
+          <input type="url" value={form.locationLink}
             onChange={e => setForm({ ...form, locationLink: e.target.value })}
             placeholder="Google Maps link (optional)"
-            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
-          />
+            className="w-full bg-dark-700/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
 
           <div className="flex items-center gap-2.5">
             <button type="button" onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-dark-700/40 px-2.5 py-1.5 text-[11px] text-gray-300 hover:bg-dark-700/70">
-              <ImageIcon size={12} /> {photoFile ? 'Change photo' : 'Add photo'}
+              <ImageIcon size={12} />{photoFile ? 'Change photo' : 'Add photo'}
             </button>
-            {photoPreview && (
-              <img src={photoPreview} alt="preview" className="w-10 h-10 rounded-lg object-cover" />
-            )}
+            {photoPreview && <img src={photoPreview} alt="preview" className="w-10 h-10 rounded-lg object-cover" />}
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onPhotoChange} />
           </div>
 
           <div className="flex gap-2 pt-0.5">
             <button type="submit" disabled={submitting}
               className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-60 text-white text-xs font-semibold px-3 py-2 rounded-xl">
-              {submitting ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add to pool
+              {submitting ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}Add to pool
             </button>
             <button type="button" onClick={() => setShowCreate(false)}
               className="px-3 text-xs text-gray-400 hover:text-gray-200">Cancel</button>
@@ -662,32 +926,28 @@ export default function Tasks() {
         </form>
       )}
 
-      {/* Task pool section */}
+      {/* ── Pool section ── */}
       <section className="space-y-2.5 w-full min-w-0">
 
-        {/* Tabs — flex row, scrollable, no wrapping */}
+        {/* Tabs */}
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 custom-scroll">
           {TABS.map(t => {
-            const Icon = t.icon;
+            const Icon   = t.icon;
             const active = tab === t.key;
             return (
-              <button
-                key={t.key}
-                onClick={() => setTab(active ? 'all' : t.key)}
+              <button key={t.key} onClick={() => setTab(active ? 'all' : t.key)}
                 className={`flex-shrink-0 inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors whitespace-nowrap ${
                   active
                     ? 'border-brand-500 bg-brand-600/15 text-brand-200'
                     : 'border-white/8 bg-dark-700/40 text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <Icon size={12} />
-                {t.label}
+                }`}>
+                <Icon size={12} />{t.label}
               </button>
             );
           })}
         </div>
 
-        {/* Context line */}
+        {/* Context / location line */}
         <div className="flex items-center justify-between text-[10px] text-gray-500">
           <span>
             {showLeads
@@ -697,15 +957,13 @@ export default function Tasks() {
               : `${openPool.length} available`}
           </span>
           {tab !== 'initiated' && (
-            geoStatus === 'ready' ? (
-              <span className="inline-flex items-center gap-0.5 text-green-400"><MapPin size={10} /> On</span>
-            ) : geoStatus === 'locating' ? (
-              <span className="inline-flex items-center gap-0.5"><Loader2 size={10} className="animate-spin" /> Locating…</span>
-            ) : (geoStatus === 'denied' || geoStatus === 'unsupported') ? (
-              <button onClick={requestLocation} className="inline-flex items-center gap-0.5 text-brand-300 hover:text-brand-200">
-                <MapPin size={10} /> Enable location
-              </button>
-            ) : null
+            geoStatus === 'ready'
+              ? <span className="inline-flex items-center gap-0.5 text-green-400"><MapPin size={10} />On</span>
+              : geoStatus === 'locating'
+              ? <span className="inline-flex items-center gap-0.5"><Loader2 size={10} className="animate-spin" />Locating…</span>
+              : (geoStatus === 'denied' || geoStatus === 'unsupported')
+              ? <button onClick={requestLocation} className="inline-flex items-center gap-0.5 text-brand-300 hover:text-brand-200"><MapPin size={10} />Enable location</button>
+              : null
           )}
         </div>
 
@@ -715,13 +973,9 @@ export default function Tasks() {
             {/* Search */}
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-              <input
-                type="text"
-                value={leadSearch}
-                onChange={e => setLeadSearch(e.target.value)}
+              <input type="text" value={leadSearch} onChange={e => setLeadSearch(e.target.value)}
                 placeholder="Search leads…"
-                className="w-full bg-dark-700/80 border border-white/10 rounded-xl pl-8 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40"
-              />
+                className="w-full bg-dark-700/80 border border-white/10 rounded-xl pl-8 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40" />
               {leadSearch && (
                 <button onClick={() => setLeadSearch('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
@@ -732,12 +986,12 @@ export default function Tasks() {
 
             {leadsLoading && displayedLeads.length === 0 && (
               <p className="text-xs text-gray-500 py-6 text-center flex items-center justify-center gap-2">
-                <Loader2 size={13} className="animate-spin" /> Loading leads…
+                <Loader2 size={13} className="animate-spin" />Loading leads…
               </p>
             )}
             {!leadsLoading && displayedLeads.length === 0 && (
               <p className="text-xs text-gray-600 py-6 text-center">
-                {leadSearch ? `No leads match "${leadSearch}".` : 'No leads yet. Add one from the Leads page.'}
+                {leadSearch ? `No leads match "${leadSearch}".` : 'No leads yet.'}
               </p>
             )}
             {displayedLeads.map(lead => (
@@ -745,11 +999,7 @@ export default function Tasks() {
                 key={lead.id}
                 lead={lead}
                 userPos={userPos}
-                isAdmin={isAdmin}
-                onAddTasks={addLeadTasks}
-                onDeleteTask={deleteLeadTask}
-                onClaim={claimLead}
-                claiming={claimingId === lead.id}
+                onOpenDetail={setDetailLead}
               />
             ))}
           </div>
@@ -767,7 +1017,6 @@ export default function Tasks() {
                 userPos={userPos}
                 onClaim={claimProject}
                 claiming={claimingId === opp.id}
-                initiated={tab === 'initiated'}
                 canDelete={isAdmin}
                 onDelete={deleteCard}
               />
