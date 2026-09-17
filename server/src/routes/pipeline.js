@@ -11,29 +11,59 @@ function ownLeadWhere(user, extra = {}) {
   return base;
 }
 
+// Read configured pipeline stages (JSON array of { key, label }) from settings.
+// Falls back to the default 3 stages when nothing is configured.
+async function readConfiguredStages() {
+  const DEFAULTS = [
+    { key: 'CONNECT', label: 'Connect' },
+    { key: 'REPLY', label: 'Reply' },
+    { key: 'INTEREST', label: 'Interest' }
+  ];
+  try {
+    const setting = await prisma.setting.findUnique({ where: { key: 'pipelineStages' } });
+    if (!setting?.value) return DEFAULTS;
+    const parsed = JSON.parse(setting.value);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.filter(s => s && s.key && s.label);
+    }
+  } catch { /* fall through */ }
+  return DEFAULTS;
+}
+
 // GET /pipeline
 router.get('/', authenticate, async (req, res) => {
   try {
-    const leads = await prisma.lead.findMany({
-      where: ownLeadWhere(req.user),
-      select: {
-        id: true, fullName: true, phone: true, company: true, stage: true,
-        temperature: true, priority: true, budget: true, updatedAt: true,
-        assignedTo: { select: { name: true, avatar: true } }
-      },
-      orderBy: { updatedAt: 'desc' }
-    });
+    const [leads, configured] = await Promise.all([
+      prisma.lead.findMany({
+        where: ownLeadWhere(req.user),
+        select: {
+          id: true, fullName: true, phone: true, company: true, stage: true,
+          temperature: true, priority: true, budget: true, updatedAt: true,
+          assignedTo: { select: { name: true, avatar: true } }
+        },
+        orderBy: { updatedAt: 'desc' }
+      }),
+      readConfiguredStages()
+    ]);
 
-    const stages = [
-      'CONNECT','REPLY','INTEREST','TRUST','TRIAL',
-      'DEMO_BOOKED','DEMO_ATTENDED','PROPOSAL_SENT','NEGOTIATION','WON','LOST'
-    ];
     const pipeline = {};
-    stages.forEach(s => { pipeline[s] = []; });
-    leads.forEach(l => { if (pipeline[l.stage]) pipeline[l.stage].push(l); });
+    // Buckets for every configured stage.
+    configured.forEach(s => { pipeline[s.key] = []; });
+
+    leads.forEach(l => {
+      if (pipeline[l.stage]) {
+        pipeline[l.stage].push(l);
+      } else {
+        // Lead sits in a stage no longer configured — surface it under the
+        // first configured stage so it isn't lost.
+        const firstKey = configured[0]?.key;
+        if (firstKey) pipeline[firstKey].push(l);
+      }
+    });
 
     res.json(pipeline);
   } catch (err) {
+    console.error('Pipeline fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch pipeline' });
   }
 });
