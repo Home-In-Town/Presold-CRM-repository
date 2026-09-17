@@ -887,9 +887,13 @@ function LeadCard({ lead, userPos, currentUser, onOpenDetail }) {
           <Check size={11} className="text-green-400" />All tasks claimed
         </div>
       ) : claimableTasks.length > 0 ? (
-        <div className="w-full bg-brand-600/10 text-brand-300 text-[11px] font-semibold py-1.5 flex items-center justify-center gap-1.5">
-          <Hand size={11} />{claimableTasks.length} task{claimableTasks.length > 1 ? 's' : ''} available for your team · tap to claim
-        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenDetail(lead); }}
+          className="w-full bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 transition-colors shadow-lg shadow-brand-600/30 ring-1 ring-inset ring-brand-400/40"
+        >
+          <Hand size={13} />
+          Claim {claimableTasks.length} Task{claimableTasks.length > 1 ? 's' : ''}
+        </button>
       ) : tasks.length > 0 ? (
         <div className="w-full bg-dark-700/40 text-gray-600 text-[11px] py-1.5 flex items-center justify-center">
           Tap to view
