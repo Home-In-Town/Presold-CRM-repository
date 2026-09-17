@@ -34,6 +34,15 @@ function teamLabel(val) {
   return TEAM_META[val]?.label || val || 'Unknown';
 }
 
+// Resolve which team to display for a claimed task: prefer the claimer's own
+// functional team, else fall back to the team the task was assigned to.
+function resolveClaimerTeam(claimer, taskTeam) {
+  const ft = claimer?.functionalTeam;
+  if (ft && ft !== 'ALL') return TEAM_META[ft] || null;
+  if (taskTeam && taskTeam !== 'ALL') return TEAM_META[taskTeam] || null;
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -254,14 +263,19 @@ function ClaimedGroup({ title, subtitle, photoUrl, initial, badge, badgeColor, t
         <div className="border-t border-white/8 divide-y divide-white/5">
           {tasks.map(t => {
             const claimer = t.user;
-            const claimerTeam = claimer?.functionalTeam;
+            // Prefer the claimer's own functional team; if they're on ALL/none,
+            // fall back to the team the task was assigned to.
+            const claimerTeam = (claimer?.functionalTeam && claimer.functionalTeam !== 'ALL')
+              ? claimer.functionalTeam
+              : (t.taskTeam && t.taskTeam !== 'ALL' ? t.taskTeam : null);
             const teamMt = TEAM_META[claimerTeam] || null;
+            const teamTextColor = teamMt ? teamMt.color.split(' ').find(c => c.startsWith('text-')) : 'text-gray-500';
             return (
               <div key={t.id} className="flex items-center gap-2.5 px-3 py-2.5">
                 {/* Task status dot */}
                 <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${t.completed ? 'bg-green-400' : 'bg-amber-400'}`} />
 
-                {/* Title + team badge */}
+                {/* Title + task team badge */}
                 <div className="flex-1 min-w-0">
                   <p className={`text-xs font-medium leading-snug ${t.completed === true ? 'line-through text-gray-500' : 'text-white'}`}>
                     {t.title}
@@ -271,19 +285,15 @@ function ClaimedGroup({ title, subtitle, photoUrl, initial, badge, badgeColor, t
                   )}
                 </div>
 
-                {/* Claimed by */}
+                {/* Claimed by — user name + team name */}
                 {claimer && (
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <Avatar user={claimer} size={5} />
-                    <div className="text-right">
+                    <div className="text-right leading-tight">
                       <p className="text-[10px] text-white font-medium leading-none">{claimer.name}</p>
-                      {claimerTeam && claimerTeam !== 'ALL' && teamMt ? (
-                        <p className={`text-[9px] font-semibold leading-none mt-0.5 ${teamMt.color.split(' ').find(c => c.startsWith('text-'))}`}>
-                          {teamMt.label}
-                        </p>
-                      ) : (
-                        <p className="text-[9px] text-gray-500 leading-none mt-0.5">All Teams</p>
-                      )}
+                      <p className={`text-[9px] font-semibold leading-none mt-0.5 ${teamMt ? teamTextColor : 'text-gray-500'}`}>
+                        {teamMt ? teamMt.label : 'All Teams'}
+                      </p>
                     </div>
                     {t.completed && <Check size={11} className="text-green-400" />}
                   </div>
@@ -513,8 +523,7 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
                 <div className="space-y-1.5">
                   {tasks.map(t => {
                     const claimer = t.user;
-                    const claimerTeam = claimer?.functionalTeam;
-                    const claimerTeamMeta = TEAM_META[claimerTeam];
+                    const claimerTeamMeta = resolveClaimerTeam(claimer, t.taskTeam);
                     const isMyClaim  = t.userId === currentUser?.id;
                     const iCanClaim  = !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam);
                     const isChecked  = selectedIds.has(t.id);
@@ -559,7 +568,7 @@ function LeadDetailModal({ lead, onClose, isAdmin, currentUser, onAddTasks, onDe
                                   {t.completed ? '✓ Done by' : 'By'}{' '}
                                   <span className="text-white font-medium">{claimer.name}</span>
                                 </span>
-                                {claimerTeam && claimerTeam !== 'ALL' && claimerTeamMeta && (
+                                {claimerTeamMeta && (
                                   <span className={`font-semibold ${claimerTeamMeta.color.split(' ').find(c => c.startsWith('text-'))}`}>
                                     · {claimerTeamMeta.label}
                                   </span>
@@ -734,7 +743,7 @@ function OpportunityCard({ opp, userPos, currentUser, onClaim, claiming, canDele
             const meta    = TEAM_META[t.taskTeam] || TEAM_META['ALL'];
             const hasTeam = t.taskTeam && t.taskTeam !== 'ALL';
             const claimer = t.user;
-            const claimerTeamMeta = claimer?.functionalTeam ? TEAM_META[claimer.functionalTeam] : null;
+            const claimerTeamMeta = resolveClaimerTeam(claimer, t.taskTeam);
             return (
               <div key={t.id} className="flex items-center gap-1.5 flex-wrap">
                 <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${hasTeam ? meta.color : 'bg-dark-700/50 border-white/10 text-gray-200'}`}>
@@ -745,7 +754,7 @@ function OpportunityCard({ opp, userPos, currentUser, onClaim, claiming, canDele
                   <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
                     <Avatar user={claimer} size={4} />
                     <span>{claimer.name}</span>
-                    {claimerTeamMeta && claimerTeamMeta.value !== 'ALL' && (
+                    {claimerTeamMeta && (
                       <span className={`font-semibold ${claimerTeamMeta.color.split(' ').find(c => c.startsWith('text-'))}`}>
                         · {claimerTeamMeta.label}
                       </span>
@@ -836,7 +845,7 @@ function LeadCard({ lead, userPos, currentUser, onOpenDetail }) {
             const meta    = TEAM_META[t.taskTeam] || TEAM_META['ALL'];
             const hasTeam = t.taskTeam && t.taskTeam !== 'ALL';
             const claimer = t.user;
-            const claimerTeamMeta = claimer?.functionalTeam ? TEAM_META[claimer.functionalTeam] : null;
+            const claimerTeamMeta = resolveClaimerTeam(claimer, t.taskTeam);
             return (
               <div key={t.id} className="flex items-center gap-1.5 flex-wrap">
                 <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] whitespace-nowrap ${hasTeam ? meta.color : 'bg-dark-700/50 border-white/10 text-gray-200'}`}>
@@ -847,7 +856,7 @@ function LeadCard({ lead, userPos, currentUser, onOpenDetail }) {
                   <span className="inline-flex items-center gap-1 text-[10px] text-gray-400">
                     <Avatar user={claimer} size={4} />
                     <span>{claimer.name}</span>
-                    {claimerTeamMeta && claimerTeamMeta.value !== 'ALL' && (
+                    {claimerTeamMeta && (
                       <span className={`font-semibold ${claimerTeamMeta.color.split(' ').find(c => c.startsWith('text-'))}`}>
                         · {claimerTeamMeta.label}
                       </span>

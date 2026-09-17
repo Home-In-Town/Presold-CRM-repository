@@ -54,7 +54,26 @@ export default function Team() {
     }
   };
 
+  const setFunctionalTeam = async (userId, functionalTeam) => {
+    // Optimistic update
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, functionalTeam } : u));
+    try {
+      await api.put(`/teams/functional-team/${userId}`, { functionalTeam });
+      toast.success('Task team updated');
+    } catch {
+      toast.error('Failed to update task team');
+      loadData();
+    }
+  };
+
   const isAdmin = user?.role === 'ADMIN';
+
+  const FUNCTIONAL_TEAMS = [
+    { value: 'ALL',          label: 'All Teams' },
+    { value: 'SALES_TEAM',   label: 'Sales Team' },
+    { value: 'B2B_SALES',    label: 'B2B Sales' },
+    { value: 'CONTENT_TEAM', label: 'Content Team' },
+  ];
 
   return (
     <div className="space-y-6">
@@ -73,6 +92,7 @@ export default function Team() {
               <th className="text-left text-[10px] font-semibold text-gray-500 uppercase px-4 py-3 hidden sm:table-cell">Role</th>
               <th className="text-left text-[10px] font-semibold text-gray-500 uppercase px-4 py-3 hidden md:table-cell">Attendance</th>
               <th className="text-left text-[10px] font-semibold text-gray-500 uppercase px-4 py-3 hidden md:table-cell">Team</th>
+              <th className="text-left text-[10px] font-semibold text-gray-500 uppercase px-4 py-3">Task Team</th>
               <th className="text-left text-[10px] font-semibold text-gray-500 uppercase px-4 py-3">Status</th>
               {isAdmin && <th className="text-right text-[10px] font-semibold text-gray-500 uppercase px-4 py-3">Actions</th>}
             </tr>
@@ -106,6 +126,23 @@ export default function Team() {
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
                   <span className="text-xs text-gray-500">{u.team?.name || '—'}</span>
+                </td>
+                <td className="px-4 py-3">
+                  {isAdmin && u.role !== 'ADMIN' ? (
+                    <select
+                      value={u.functionalTeam || 'ALL'}
+                      onChange={e => setFunctionalTeam(u.id, e.target.value)}
+                      className="bg-dark-700/80 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-brand-500/40"
+                    >
+                      {FUNCTIONAL_TEAMS.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      {FUNCTIONAL_TEAMS.find(t => t.value === (u.functionalTeam || 'ALL'))?.label || 'All Teams'}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`text-[10px] px-2 py-1 rounded-md ${u.pendingApproval ? 'bg-amber-500/20 text-amber-300' : u.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
