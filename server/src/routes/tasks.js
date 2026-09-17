@@ -102,10 +102,26 @@ const leadToCard = (l) => ({
   tasks: l.tasks
 });
 
-// Build a task filter for "which tasks can this user see" based on their
-// functionalTeam. Admins and ALL-team users see everything.
+// Map an account role to a functional team (mirror of client ROLE_TO_TEAM).
+const ROLE_TO_TEAM = {
+  SALES_EXECUTIVE: 'SALES_TEAM',
+  B2B_SALES:       'B2B_SALES',
+  CONTENT_CREATION:'CONTENT_TEAM',
+  DMA_WHITE_LABEL: 'DMA_TEAM',
+};
+
+// Resolve a user's effective functional team: explicit functionalTeam, else
+// derived from their account role. Returns 'ALL' when unrestricted.
+function effectiveTeam(user) {
+  const ft = user?.functionalTeam;
+  if (ft && ft !== 'ALL') return ft;
+  return ROLE_TO_TEAM[user?.role] || 'ALL';
+}
+
+// Build a task filter for "which tasks can this user see" based on their team.
+// Admins and ALL-team users see everything.
 function taskTeamFilter(user) {
-  const ft = user.functionalTeam || 'ALL';
+  const ft = effectiveTeam(user);
   if (user.role === 'ADMIN' || ft === 'ALL') return undefined; // no extra filter
   return { OR: [{ taskTeam: 'ALL' }, { taskTeam: ft }, { taskTeam: null }] };
 }
@@ -114,7 +130,7 @@ function taskTeamFilter(user) {
 // The `user` argument is used to filter tasks by team visibility.
 async function fetchLeadCards(state, user) {
   const taskCond = state === 'initiated' ? { userId: { not: null } } : { userId: null };
-  const ft = user?.functionalTeam || 'ALL';
+  const ft = effectiveTeam(user);
   const teamCond = (user?.role === 'ADMIN' || ft === 'ALL')
     ? {}
     : { OR: [{ taskTeam: 'ALL' }, { taskTeam: ft }, { taskTeam: null }] };
@@ -483,7 +499,7 @@ router.post('/lead/:leadId/claim', authenticate, async (req, res) => {
     const lead = await prisma.lead.findUnique({ where: { id: req.params.leadId } });
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-    const ft = req.user.functionalTeam || 'ALL';
+    const ft = effectiveTeam(req.user);
     const isAllTeam = req.user.role === 'ADMIN' || ft === 'ALL';
 
     // Build which tasks this user can claim: unclaimed + matching their team
@@ -529,7 +545,7 @@ router.post('/lead/:leadId/claim-selected', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Select at least one task to claim' });
     }
 
-    const ft = req.user.functionalTeam || 'ALL';
+    const ft = effectiveTeam(req.user);
     const isAllTeam = req.user.role === 'ADMIN' || ft === 'ALL';
 
     // Only claim tasks that: belong to this lead, are in the requested IDs,

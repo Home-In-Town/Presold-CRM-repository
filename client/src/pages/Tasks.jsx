@@ -75,8 +75,13 @@ function formatDistance(km) {
 // Can this user claim a task with the given taskTeam?
 function canClaimTask(userFunctionalTeam, userRole, taskTeam) {
   if (userRole === 'ADMIN') return true;
-  const ft = userFunctionalTeam || 'ALL';
+  // Determine the user's effective team: explicit functionalTeam, else derived
+  // from their account role (Sales / B2B / Content / DMA).
+  let ft = (userFunctionalTeam && userFunctionalTeam !== 'ALL')
+    ? userFunctionalTeam
+    : (ROLE_TO_TEAM[userRole] || 'ALL');
   if (ft === 'ALL') return true;
+  // A task with no team, or 'ALL', is claimable by anyone; otherwise team must match.
   return !taskTeam || taskTeam === 'ALL' || taskTeam === ft;
 }
 
@@ -1113,15 +1118,19 @@ export default function Tasks() {
 
   const displayedLeads = useMemo(() => {
     const q = leadSearch.trim().toLowerCase();
+    const ft = user?.functionalTeam || 'ALL';
 
-    // A lead is "fully claimed" when it has tasks and every task is claimed.
-    // These are hidden from the main leads list — they live in the Claimed tab.
-    const isFullyClaimed = l => {
+    // Keep a lead in the main list while THIS user's team still has an unclaimed
+    // task on it. Once every task this user could claim is taken (by anyone),
+    // the lead drops out of the main list and lives in the Claimed tab.
+    // A lead with no tasks yet always stays (nothing to hide).
+    const hasWorkForMe = l => {
       const ts = l.tasks || [];
-      return ts.length > 0 && ts.every(t => !!t.userId);
+      if (ts.length === 0) return true; // no tasks -> keep visible
+      return ts.some(t => !t.userId && canClaimTask(ft, user?.role, t.taskTeam));
     };
 
-    const base = leads.filter(l => !isFullyClaimed(l));
+    const base = leads.filter(hasWorkForMe);
 
     const filtered = q
       ? base.filter(l => {
@@ -1139,7 +1148,7 @@ export default function Tasks() {
       if (userPos) return distOf(a) - distOf(b);
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
-  }, [leads, userPos, leadSearch]);
+  }, [leads, userPos, leadSearch, user]);
 
   const TABS = [
     { key: 'priority',  label: 'Priority',  icon: Star },
