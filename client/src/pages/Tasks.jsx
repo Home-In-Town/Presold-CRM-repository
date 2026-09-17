@@ -1113,13 +1113,23 @@ export default function Tasks() {
 
   const displayedLeads = useMemo(() => {
     const q = leadSearch.trim().toLowerCase();
+
+    // A lead is "fully claimed" when it has tasks and every task is claimed.
+    // These are hidden from the main leads list — they live in the Claimed tab.
+    const isFullyClaimed = l => {
+      const ts = l.tasks || [];
+      return ts.length > 0 && ts.every(t => !!t.userId);
+    };
+
+    const base = leads.filter(l => !isFullyClaimed(l));
+
     const filtered = q
-      ? leads.filter(l => {
+      ? base.filter(l => {
           const hay = [l.fullName, l.company, l.location, l.phone, ...(l.tasks || []).map(t => t.title)]
             .filter(Boolean).join(' ').toLowerCase();
           return hay.includes(q);
         })
-      : leads;
+      : base;
     const distOf = l => (userPos && l.latitude != null && l.longitude != null)
       ? distanceKm(userPos.lat, userPos.lng, l.latitude, l.longitude) : Infinity;
     const hasTasks = l => (l.tasks?.length || 0) > 0;
@@ -1257,7 +1267,7 @@ export default function Tasks() {
           <div className="flex items-center justify-between text-[10px] text-gray-500">
             <span>
               {showLeads
-                ? `${leads.length} lead${leads.length === 1 ? '' : 's'}`
+                ? `${displayedLeads.length} lead${displayedLeads.length === 1 ? '' : 's'} to work`
                 : tab === 'initiated' ? `${initiatedPool.length} in progress`
                 : `${openPool.length} available`}
             </span>
