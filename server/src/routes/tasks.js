@@ -47,7 +47,7 @@ const taskChipSelect = {
   claimedAt: true,
   userId: true,
   taskTeam: true,
-  user: { select: { id: true, name: true, avatar: true, functionalTeam: true } }
+  user: { select: { id: true, name: true, avatar: true, functionalTeam: true, role: true } }
 };
 
 // A full opportunity (project) with its claimable tasks.
@@ -246,7 +246,7 @@ router.get('/pool/claimed/all', authenticate, async (req, res) => {
         taskTeam: true,
         leadId: true,
         userId: true,
-        user: { select: { id: true, name: true, avatar: true, functionalTeam: true } },
+        user: { select: { id: true, name: true, avatar: true, functionalTeam: true, role: true } },
         lead: {
           select: {
             id: true,
@@ -279,7 +279,7 @@ router.get('/pool/claimed/all', authenticate, async (req, res) => {
         projectName: true,
         photoUrl: true,
         userId: true,
-        user: { select: { id: true, name: true, avatar: true, functionalTeam: true } },
+        user: { select: { id: true, name: true, avatar: true, functionalTeam: true, role: true } },
         opportunity: {
           select: {
             id: true,
@@ -323,7 +323,7 @@ const leadTaskSelect = {
   createdAt: true,
   userId: true,
   taskTeam: true,
-  user: { select: { id: true, name: true, avatar: true, functionalTeam: true } }
+  user: { select: { id: true, name: true, avatar: true, functionalTeam: true, role: true } }
 };
 
 router.get('/leads', authenticate, async (req, res) => {
@@ -842,3 +842,4 @@ router.delete('/:id', authenticate, async (req, res) => {
 });
 
 export default router;
+

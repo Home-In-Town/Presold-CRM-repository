@@ -27,19 +27,33 @@ const TEAM_OPTIONS = [
   { value: 'SALES_TEAM',   label: 'Sales Team',   short: 'Sales',   color: 'bg-brand-500/15 text-brand-300 border-brand-500/25'  },
   { value: 'B2B_SALES',    label: 'B2B Sales',    short: 'B2B',     color: 'bg-violet-500/15 text-violet-300 border-violet-500/25'},
   { value: 'CONTENT_TEAM', label: 'Content Team', short: 'Content', color: 'bg-pink-500/15 text-pink-300 border-pink-500/25'     },
+  { value: 'DMA_TEAM',     label: 'DMA Team',     short: 'DMA',     color: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'},
 ];
 const TEAM_META = Object.fromEntries(TEAM_OPTIONS.map(t => [t.value, t]));
+
+// Map a user's account role to a functional team, so we can show the team even
+// when the admin hasn't explicitly set a `functionalTeam`.
+const ROLE_TO_TEAM = {
+  SALES_EXECUTIVE: 'SALES_TEAM',
+  B2B_SALES:       'B2B_SALES',
+  CONTENT_CREATION:'CONTENT_TEAM',
+  DMA_WHITE_LABEL: 'DMA_TEAM',
+};
 
 function teamLabel(val) {
   return TEAM_META[val]?.label || val || 'Unknown';
 }
 
-// Resolve which team to display for a claimed task: prefer the claimer's own
-// functional team, else fall back to the team the task was assigned to.
+// Resolve which team to display for a claimed task.
+// Priority: explicit functionalTeam → derived from user role → task's team.
 function resolveClaimerTeam(claimer, taskTeam) {
   const ft = claimer?.functionalTeam;
-  if (ft && ft !== 'ALL') return TEAM_META[ft] || null;
-  if (taskTeam && taskTeam !== 'ALL') return TEAM_META[taskTeam] || null;
+  if (ft && ft !== 'ALL' && TEAM_META[ft]) return TEAM_META[ft];
+
+  const fromRole = ROLE_TO_TEAM[claimer?.role];
+  if (fromRole && TEAM_META[fromRole]) return TEAM_META[fromRole];
+
+  if (taskTeam && taskTeam !== 'ALL' && TEAM_META[taskTeam]) return TEAM_META[taskTeam];
   return null;
 }
 
@@ -263,12 +277,8 @@ function ClaimedGroup({ title, subtitle, photoUrl, initial, badge, badgeColor, t
         <div className="border-t border-white/8 divide-y divide-white/5">
           {tasks.map(t => {
             const claimer = t.user;
-            // Prefer the claimer's own functional team; if they're on ALL/none,
-            // fall back to the team the task was assigned to.
-            const claimerTeam = (claimer?.functionalTeam && claimer.functionalTeam !== 'ALL')
-              ? claimer.functionalTeam
-              : (t.taskTeam && t.taskTeam !== 'ALL' ? t.taskTeam : null);
-            const teamMt = TEAM_META[claimerTeam] || null;
+            // Resolve team: explicit functionalTeam → derived from role → task team
+            const teamMt = resolveClaimerTeam(claimer, t.taskTeam);
             const teamTextColor = teamMt ? teamMt.color.split(' ').find(c => c.startsWith('text-')) : 'text-gray-500';
             return (
               <div key={t.id} className="flex items-center gap-2.5 px-3 py-2.5">
