@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import {
   ArrowLeft, Phone, Building2, MapPin, Upload,
   Check, MessageCircle, FileText, Image, Video, Send,
-  ChevronDown, ChevronRight, Plus, X, Loader2
+  ChevronDown, ChevronRight, Plus, X, Loader2,
+  Pencil, Trash2, GripVertical, ArrowUp, ArrowDown
 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -49,6 +50,17 @@ export default function LeadDetail() {
   const [journeySteps, setJourneySteps]   = useState([]);
   const [expandedStepId, setExpandedStepId] = useState(null);
   const [resettingJourney, setResettingJourney] = useState(false);
+
+  // Journey editing (admin)
+  const [editMode, setEditMode]           = useState(false);
+  const [editingStepId, setEditingStepId] = useState(null);
+  const [editLabel, setEditLabel]         = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [savingEdit, setSavingEdit]       = useState(false);
+  const [addingStep, setAddingStep]       = useState(false);
+  const [newStepLabel, setNewStepLabel]   = useState('');
+  const [newStepDesc, setNewStepDesc]     = useState('');
+  const [savingStep, setSavingStep]       = useState(false);
 
   useEffect(() => {
     loadLead();
@@ -155,6 +167,81 @@ export default function LeadDetail() {
       toast.success('Journey synced to pipeline stages');
     } catch { toast.error('Sync failed'); }
     setResettingJourney(false);
+  };
+
+  // ── Journey editing (admin) ─────────────────────────────────────────────────
+  const startEditStep = (step) => {
+    setEditingStepId(step.id);
+    setEditLabel(step.label);
+    setEditDescription(step.description || '');
+  };
+
+  const cancelEditStep = () => {
+    setEditingStepId(null);
+    setEditLabel('');
+    setEditDescription('');
+  };
+
+  const saveEditStep = async () => {
+    const label = editLabel.trim();
+    if (!label) { toast.error('Step name is required'); return; }
+    setSavingEdit(true);
+    try {
+      await api.put(`/journey/steps/${editingStepId}`, { label, description: editDescription.trim() });
+      await Promise.all([loadJourney(), loadStages()]);
+      toast.success('Step updated');
+      cancelEditStep();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update step');
+    }
+    setSavingEdit(false);
+  };
+
+  const addJourneyStep = async () => {
+    const label = newStepLabel.trim();
+    if (!label) { toast.error('Step name is required'); return; }
+    setSavingStep(true);
+    try {
+      await api.post('/journey/steps/add', {
+        label,
+        description: newStepDesc.trim(),
+        category: 'COMMON'
+      });
+      await Promise.all([loadJourney(), loadStages()]);
+      setNewStepLabel(''); setNewStepDesc(''); setAddingStep(false);
+      toast.success(`Step "${label}" added`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to add step');
+    }
+    setSavingStep(false);
+  };
+
+  const deleteJourneyStep = async (step) => {
+    if (!confirm(`Delete the "${step.label}" step? This removes it from all leads.`)) return;
+    try {
+      await api.delete(`/journey/steps/${step.id}`);
+      await Promise.all([loadJourney(), loadStages()]);
+      toast.success('Step deleted');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete step');
+    }
+  };
+
+  const moveStep = async (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= journeySteps.length) return;
+    const reordered = [...journeySteps];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(target, 0, moved);
+    // Optimistic update
+    setJourneySteps(reordered.map((s, i) => ({ ...s, order: i + 1 })));
+    try {
+      await api.post('/journey/steps/reorder', { orderedIds: reordered.map(s => s.id) });
+      await Promise.all([loadJourney(), loadStages()]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to reorder');
+      await loadJourney();
+    }
   };
 
   // ── Other actions ─────────────────────────────────────────────────────────
@@ -292,15 +379,24 @@ export default function LeadDetail() {
             <span className="text-[11px] text-brand-400 font-medium">{completedCount}/{journeySteps.length} · {progress}%</span>
           </div>
           {isAdmin && (
-            <button
-              onClick={resetJourneyDefaults}
-              disabled={resettingJourney}
-              className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1"
-              title="Sync journey steps to match pipeline stages"
-            >
-              {resettingJourney ? <Loader2 size={12} className="animate-spin" /> : null}
-              Sync with stages
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setEditMode(v => !v); cancelEditStep(); setAddingStep(false); }}
+                className={`text-[11px] flex items-center gap-1 ${editMode ? 'text-brand-300 hover:text-brand-200' : 'text-gray-400 hover:text-gray-200'}`}
+                title="Edit journey steps"
+              >
+                {editMode ? <><Check size={12} /> Done</> : <><Pencil size={12} /> Edit</>}
+              </button>
+              <button
+                onClick={resetJourneyDefaults}
+                disabled={resettingJourney}
+                className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                title="Sync journey steps to match pipeline stages"
+              >
+                {resettingJourney ? <Loader2 size={12} className="animate-spin" /> : null}
+                Sync
+              </button>
+            </div>
           )}
         </div>
 
@@ -315,13 +411,74 @@ export default function LeadDetail() {
         {/* Steps */}
         <div className="space-y-2">
           {journeySteps.length === 0 && (
-            <p className="text-xs text-gray-600 py-3 text-center">No journey steps. Add pipeline stages to populate.</p>
+            <p className="text-xs text-gray-600 py-3 text-center">No journey steps yet.{isAdmin ? ' Use Edit to add one.' : ''}</p>
           )}
           {journeySteps.map((step, i) => {
             const prevStep = journeySteps.find(s => s.order === step.order - 1);
             const isLocked = step.order > 1 && !prevStep?.completed;
             const isExpanded = expandedStepId === step.id;
+            const isEditing = editingStepId === step.id;
 
+            // ── Edit mode row ──
+            if (editMode) {
+              return (
+                <div key={step.id} className="rounded-xl border border-white/8 bg-dark-600/30">
+                  {isEditing ? (
+                    <div className="p-3 space-y-2">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editLabel}
+                        onChange={e => setEditLabel(e.target.value)}
+                        placeholder="Step name"
+                        className="input-field text-sm w-full"
+                      />
+                      <textarea
+                        value={editDescription}
+                        onChange={e => setEditDescription(e.target.value)}
+                        placeholder="Description / instructions (optional)"
+                        rows={2}
+                        className="input-field text-xs w-full resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={saveEditStep} disabled={savingEdit || !editLabel.trim()}
+                          className="btn-primary px-3 text-xs disabled:opacity-50 flex items-center gap-1">
+                          {savingEdit ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save
+                        </button>
+                        <button onClick={cancelEditStep} className="px-3 text-xs text-gray-400 hover:text-gray-200">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      {/* Reorder controls */}
+                      <div className="flex flex-col -my-1">
+                        <button onClick={() => moveStep(i, -1)} disabled={i === 0}
+                          className="text-gray-500 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed">
+                          <ArrowUp size={12} />
+                        </button>
+                        <button onClick={() => moveStep(i, 1)} disabled={i === journeySteps.length - 1}
+                          className="text-gray-500 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed">
+                          <ArrowDown size={12} />
+                        </button>
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-600 w-4">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-200 truncate">{step.label}</p>
+                        {step.description && <p className="text-[10px] text-gray-500 truncate">{step.description}</p>}
+                      </div>
+                      <button onClick={() => startEditStep(step)} className="p-1 text-gray-500 hover:text-brand-300" title="Edit">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => deleteJourneyStep(step)} className="p-1 text-gray-500 hover:text-red-400" title="Delete">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // ── Normal (view / complete) mode row ──
             return (
               <div key={step.id} className={`rounded-xl border transition-all ${
                 step.completed ? 'border-green-500/15 bg-green-500/5' :
@@ -383,6 +540,43 @@ export default function LeadDetail() {
             );
           })}
         </div>
+
+        {/* Add step (edit mode) */}
+        {editMode && (
+          addingStep ? (
+            <div className="mt-2 rounded-xl border border-brand-500/20 bg-dark-600/30 p-3 space-y-2">
+              <input
+                autoFocus
+                type="text"
+                value={newStepLabel}
+                onChange={e => setNewStepLabel(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addJourneyStep(); } }}
+                placeholder="New step name (e.g. Site Visit)"
+                className="input-field text-sm w-full"
+              />
+              <textarea
+                value={newStepDesc}
+                onChange={e => setNewStepDesc(e.target.value)}
+                placeholder="Description / instructions (optional)"
+                rows={2}
+                className="input-field text-xs w-full resize-none"
+              />
+              <div className="flex gap-2">
+                <button onClick={addJourneyStep} disabled={savingStep || !newStepLabel.trim()}
+                  className="btn-primary px-3 text-xs disabled:opacity-50 flex items-center gap-1">
+                  {savingStep ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add step
+                </button>
+                <button onClick={() => { setAddingStep(false); setNewStepLabel(''); setNewStepDesc(''); }}
+                  className="px-3 text-xs text-gray-400 hover:text-gray-200">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setAddingStep(true)}
+              className="mt-2 w-full rounded-xl border border-dashed border-white/10 hover:border-brand-500/40 py-2.5 text-xs text-brand-300 hover:text-brand-200 flex items-center justify-center gap-1.5 transition-colors">
+              <Plus size={13} /> Add journey step
+            </button>
+          )
+        )}
 
       </div>
 
