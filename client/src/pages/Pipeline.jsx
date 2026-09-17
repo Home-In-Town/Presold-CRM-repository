@@ -1,22 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, MapPin, Phone, ChevronRight } from 'lucide-react';
+import { Building2, MapPin, Phone, ChevronRight, Loader2 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
-const STAGES = [
-  { key: 'CONNECT',       label: 'Connect',     color: 'border-gray-400',    activeBg: 'bg-gray-500/20',    activeBorder: 'border-gray-400',    pill: 'bg-gray-500/15 text-gray-300 border-gray-500/30'    },
-  { key: 'REPLY',         label: 'Reply',        color: 'border-blue-400',    activeBg: 'bg-blue-500/20',    activeBorder: 'border-blue-400',    pill: 'bg-blue-500/15 text-blue-300 border-blue-500/30'    },
-  { key: 'INTEREST',      label: 'Interest',     color: 'border-cyan-400',    activeBg: 'bg-cyan-500/20',    activeBorder: 'border-cyan-400',    pill: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'    },
-  { key: 'TRUST',         label: 'Trust',        color: 'border-purple-400',  activeBg: 'bg-purple-500/20',  activeBorder: 'border-purple-400',  pill: 'bg-purple-500/15 text-purple-300 border-purple-500/30'  },
-  { key: 'TRIAL',         label: 'Trial',        color: 'border-amber-400',   activeBg: 'bg-amber-500/20',   activeBorder: 'border-amber-400',   pill: 'bg-amber-500/15 text-amber-300 border-amber-500/30'   },
-  { key: 'DEMO_BOOKED',   label: 'Demo Booked',  color: 'border-orange-400',  activeBg: 'bg-orange-500/20',  activeBorder: 'border-orange-400',  pill: 'bg-orange-500/15 text-orange-300 border-orange-500/30'  },
-  { key: 'DEMO_ATTENDED', label: 'Demo Done',    color: 'border-green-400',   activeBg: 'bg-green-500/20',   activeBorder: 'border-green-400',   pill: 'bg-green-500/15 text-green-300 border-green-500/30'   },
-  { key: 'PROPOSAL_SENT', label: 'Proposal',     color: 'border-indigo-400',  activeBg: 'bg-indigo-500/20',  activeBorder: 'border-indigo-400',  pill: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'  },
-  { key: 'NEGOTIATION',   label: 'Negotiation',  color: 'border-pink-400',    activeBg: 'bg-pink-500/20',    activeBorder: 'border-pink-400',    pill: 'bg-pink-500/15 text-pink-300 border-pink-500/30'    },
-  { key: 'WON',           label: 'Won',          color: 'border-emerald-400', activeBg: 'bg-emerald-500/20', activeBorder: 'border-emerald-400', pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
-  { key: 'LOST',          label: 'Lost',         color: 'border-red-400',     activeBg: 'bg-red-500/20',     activeBorder: 'border-red-400',     pill: 'bg-red-500/15 text-red-300 border-red-500/30'     },
+// Colour palette applied to stages in order — cycles if there are more stages.
+const STAGE_PALETTE = [
+  { color: 'border-gray-400',    activeBg: 'bg-gray-500/20',    activeBorder: 'border-gray-400',    pill: 'bg-gray-500/15 text-gray-300 border-gray-500/30'    },
+  { color: 'border-blue-400',    activeBg: 'bg-blue-500/20',    activeBorder: 'border-blue-400',    pill: 'bg-blue-500/15 text-blue-300 border-blue-500/30'    },
+  { color: 'border-cyan-400',    activeBg: 'bg-cyan-500/20',    activeBorder: 'border-cyan-400',    pill: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'    },
+  { color: 'border-purple-400',  activeBg: 'bg-purple-500/20',  activeBorder: 'border-purple-400',  pill: 'bg-purple-500/15 text-purple-300 border-purple-500/30'  },
+  { color: 'border-amber-400',   activeBg: 'bg-amber-500/20',   activeBorder: 'border-amber-400',   pill: 'bg-amber-500/15 text-amber-300 border-amber-500/30'   },
+  { color: 'border-orange-400',  activeBg: 'bg-orange-500/20',  activeBorder: 'border-orange-400',  pill: 'bg-orange-500/15 text-orange-300 border-orange-500/30'  },
+  { color: 'border-green-400',   activeBg: 'bg-green-500/20',   activeBorder: 'border-green-400',   pill: 'bg-green-500/15 text-green-300 border-green-500/30'   },
+  { color: 'border-indigo-400',  activeBg: 'bg-indigo-500/20',  activeBorder: 'border-indigo-400',  pill: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'  },
+  { color: 'border-pink-400',    activeBg: 'bg-pink-500/20',    activeBorder: 'border-pink-400',    pill: 'bg-pink-500/15 text-pink-300 border-pink-500/30'    },
+  { color: 'border-emerald-400', activeBg: 'bg-emerald-500/20', activeBorder: 'border-emerald-400', pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+  { color: 'border-red-400',     activeBg: 'bg-red-500/20',     activeBorder: 'border-red-400',     pill: 'bg-red-500/15 text-red-300 border-red-500/30'     },
 ];
 
 const TEMP_ICON  = { HOT: '🔥', WARM: '☀️', COLD: '❄️' };
@@ -28,20 +29,42 @@ const TEMP_COLOR = {
 
 export default function Pipeline() {
   const [pipeline, setPipeline]       = useState({});
+  const [stages, setStages]           = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [activeStage, setActiveStage] = useState('CONNECT');
+  const [activeStage, setActiveStage] = useState(null);
   const [draggedLead, setDraggedLead] = useState(null);
   const [dragTarget, setDragTarget]   = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => { loadPipeline(); }, []);
+  useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    try {
+      const [pipeRes, stagesRes] = await Promise.all([
+        api.get('/pipeline'),
+        api.get('/settings/pipeline-stages'),
+      ]);
+      setPipeline(pipeRes.data);
+
+      // Build stages from configured pipeline stages, applying palette colours.
+      const configured = Array.isArray(stagesRes.data) ? stagesRes.data : [];
+      const built = configured.map((s, i) => ({
+        key: s.key,
+        label: s.label,
+        ...STAGE_PALETTE[i % STAGE_PALETTE.length],
+      }));
+      setStages(built);
+      // Default to the first stage.
+      setActiveStage(prev => prev || built[0]?.key || null);
+    } catch { toast.error('Failed to load pipeline'); }
+    setLoading(false);
+  };
 
   const loadPipeline = async () => {
     try {
       const res = await api.get('/pipeline');
       setPipeline(res.data);
     } catch { toast.error('Failed to load pipeline'); }
-    setLoading(false);
   };
 
   const moveLead = async (leadId, newStage) => {
@@ -63,7 +86,7 @@ export default function Pipeline() {
 
   const totalLeads = Object.values(pipeline).reduce((s, a) => s + (a?.length || 0), 0);
   const activeLeads = pipeline[activeStage] || [];
-  const activeStageObj = STAGES.find(s => s.key === activeStage);
+  const activeStageObj = stages.find(s => s.key === activeStage);
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -81,10 +104,10 @@ export default function Pipeline() {
         </div>
       </div>
 
-      {/* Stage selector — all 11 pills in one row */}
+      {/* Stage selector — pills from configured pipeline stages */}
       <div className="glass-card p-3">
         <div className="flex flex-wrap gap-2">
-          {STAGES.map(stage => {
+          {stages.map(stage => {
             const count   = pipeline[stage.key]?.length || 0;
             const isActive = activeStage === stage.key;
             const isDrop   = dragTarget === stage.key;
@@ -142,7 +165,7 @@ export default function Pipeline() {
           </div>
           {/* Quick stage nav arrows */}
           <div className="flex items-center gap-1">
-            {STAGES.map((s, i) => (
+            {stages.map((s, i) => (
               <button
                 key={s.key}
                 type="button"
@@ -232,7 +255,7 @@ export default function Pipeline() {
                   <div className="mt-2.5 pt-2 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <p className="text-[9px] text-gray-600 mb-1.5 uppercase tracking-wide">Move to</p>
                     <div className="flex flex-wrap gap-1">
-                      {STAGES.filter(s => s.key !== activeStage).slice(0, 3).map(s => (
+                      {stages.filter(s => s.key !== activeStage).slice(0, 3).map(s => (
                         <button
                           key={s.key}
                           type="button"

@@ -147,6 +147,25 @@ router.post('/steps/add', authenticate, authorize('ADMIN'), async (req, res) => 
       }
     });
 
+    // Keep pipeline stages in sync for COMMON steps (append matching stage).
+    if (stepCategory === 'COMMON') {
+      const setting = await prisma.setting.findUnique({ where: { key: 'pipelineStages' } });
+      const stageKey = label.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+      let stages = [];
+      if (setting?.value) {
+        try { stages = JSON.parse(setting.value); } catch { stages = []; }
+      }
+      if (!Array.isArray(stages)) stages = [];
+      if (!stages.some(s => (s.label || '').toLowerCase().trim() === label.toLowerCase().trim())) {
+        stages.push({ key: stageKey, label });
+        await prisma.setting.upsert({
+          where: { key: 'pipelineStages' },
+          update: { value: JSON.stringify(stages), type: 'json' },
+          create: { key: 'pipelineStages', value: JSON.stringify(stages), type: 'json' }
+        });
+      }
+    }
+
     const steps = await prisma.journeyStep.findMany({
       where: { category: stepCategory },
       orderBy: { order: 'asc' }
@@ -156,6 +175,118 @@ router.post('/steps/add', authenticate, authorize('ADMIN'), async (req, res) => 
     console.error('Add journey step error:', err);
     if (err.code === 'P2002') return res.status(400).json({ error: 'A step with this key already exists' });
     res.status(500).json({ error: 'Failed to add step' });
+  }
+});
+
+// PUT /journey/steps/:stepId — admin edits a journey step's label / description.
+// Keeps the matching pipeline stage label in sync (COMMON steps mirror stages).
+router.put('/steps/:stepId', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const { label, description } = req.body;
+    const step = await prisma.journeyStep.findUnique({ where: { id: req.params.stepId } });
+    if (!step) return res.status(404).json({ error: 'Step not found' });
+
+    const data = {};
+    if (typeof description === 'string') data.description = description;
+
+    const newLabel = (label || '').trim();
+    if (newLabel && newLabel !== step.label) {
+      data.label = newLabel;
+
+      // Keep the pipeline stage list in sync for COMMON steps (matched by label).
+      if (step.category === 'COMMON') {
+        const setting = await prisma.setting.findUnique({ where: { key: 'pipelineStages' } });
+        if (setting?.value) {
+          try {
+            const stages = JSON.parse(setting.value);
+            if (Array.isArray(stages)) {
+              const updated = stages.map(s =>
+                (s.label || '').toLowerCase().trim() === step.label.toLowerCase().trim()
+                  ? { ...s, label: newLabel }
+                  : s
+              );
+              await prisma.setting.update({
+                where: { key: 'pipelineStages' },
+                data: { value: JSON.stringify(updated), type: 'json' }
+              });
+            }
+          } catch { /* ignore malformed stage json */ }
+        }
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.json({ step });
+    }
+
+    const updatedStep = await prisma.journeyStep.update({
+      where: { id: req.params.stepId },
+      data
+    });
+
+    const steps = await prisma.journeyStep.findMany({
+      where: { category: step.category },
+      orderBy: { order: 'asc' }
+    });
+    res.json({ step: updatedStep, steps });
+  } catch (err) {
+    console.error('Edit journey step error:', err);
+    res.status(500).json({ error: 'Failed to edit step' });
+  }
+});
+
+// POST /journey/steps/reorder — admin reorders steps. Body: { orderedIds: string[] }
+router.post('/steps/reorder', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds array is required' });
+    }
+
+    // Find the category from the first step so we can return the full list after.
+    const first = await prisma.journeyStep.findUnique({ where: { id: orderedIds[0] } });
+    if (!first) return res.status(404).json({ error: 'Step not found' });
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      await prisma.journeyStep.update({
+        where: { id: orderedIds[i] },
+        data: { order: i + 1 }
+      });
+    }
+
+    // Re-sync pipeline stage order for COMMON steps.
+    if (first.category === 'COMMON') {
+      const setting = await prisma.setting.findUnique({ where: { key: 'pipelineStages' } });
+      const orderedSteps = await prisma.journeyStep.findMany({
+        where: { category: 'COMMON' }, orderBy: { order: 'asc' }
+      });
+      if (setting?.value) {
+        try {
+          const stages = JSON.parse(setting.value);
+          if (Array.isArray(stages)) {
+            // Reorder stages to match the step order (matched by label).
+            const reordered = orderedSteps
+              .map(st => stages.find(s => (s.label || '').toLowerCase().trim() === st.label.toLowerCase().trim()))
+              .filter(Boolean);
+            // Append any stages that didn't match a step (safety).
+            stages.forEach(s => { if (!reordered.includes(s)) reordered.push(s); });
+            await prisma.setting.update({
+              where: { key: 'pipelineStages' },
+              data: { value: JSON.stringify(reordered), type: 'json' }
+            });
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    const steps = await prisma.journeyStep.findMany({
+      where: { category: first.category },
+      orderBy: { order: 'asc' }
+    });
+    res.json({ steps });
+  } catch (err) {
+    console.error('Reorder journey steps error:', err);
+    res.status(500).json({ error: 'Failed to reorder steps' });
   }
 });
 
@@ -174,6 +305,25 @@ router.delete('/steps/:stepId', authenticate, authorize('ADMIN'), async (req, re
 
     // Delete the step itself
     await prisma.journeyStep.delete({ where: { id: stepId } });
+
+    // Keep pipeline stages in sync for COMMON steps (remove matching stage).
+    if (stepCategory === 'COMMON') {
+      const setting = await prisma.setting.findUnique({ where: { key: 'pipelineStages' } });
+      if (setting?.value) {
+        try {
+          const stages = JSON.parse(setting.value);
+          if (Array.isArray(stages) && stages.length > 1) {
+            const updated = stages.filter(s =>
+              (s.label || '').toLowerCase().trim() !== step.label.toLowerCase().trim()
+            );
+            await prisma.setting.update({
+              where: { key: 'pipelineStages' },
+              data: { value: JSON.stringify(updated), type: 'json' }
+            });
+          }
+        } catch { /* ignore */ }
+      }
+    }
 
     // Re-order remaining steps within the same category
     const remainingSteps = await prisma.journeyStep.findMany({

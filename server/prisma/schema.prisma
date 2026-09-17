@@ -26,6 +26,10 @@ model User {
   teamId        String?   @db.ObjectId
   team          Team?     @relation(fields: [teamId], references: [id])
 
+  // Functional department — used to filter which tasks each member sees.
+  // "ALL" means the user can see tasks for every team.
+  functionalTeam String?  @default("ALL")
+
   leads               Lead[]
   activities          LeadActivity[]
   journeyProgress     JourneyProgress[]
@@ -410,6 +414,11 @@ model Task {
   // Tasks section's Leads view).
   leadId        String?      @db.ObjectId
   lead          Lead?        @relation(fields: [leadId], references: [id])
+
+  // Which functional team this task is meant for.
+  // "ALL" = visible to every team. "B2B_SALES" | "SALES_TEAM" | "CONTENT_TEAM"
+  // = only members of that team (and admins) can see it.
+  taskTeam      String?      @default("ALL")
 }
 
 // A pooled opportunity == one project/site. It groups multiple tasks that can

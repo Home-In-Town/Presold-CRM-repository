@@ -37,6 +37,7 @@ router.get('/users', authenticate, authorize('ADMIN'), async (req, res) => {
         isActive: true,
         pendingApproval: true,
         teamId: true,
+        functionalTeam: true,
         createdAt: true,
         lastLogin: true,
         team: { select: { name: true } },
@@ -270,6 +271,20 @@ router.put('/role/:userId', authenticate, authorize('ADMIN'), async (req, res) =
     res.json({ message: 'Role updated' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
+// Set a user's functional team (Sales / B2B / Content / All).
+// Controls which pooled tasks that user can see & claim.
+router.put('/functional-team/:userId', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const { functionalTeam } = req.body;
+    const allowed = ['ALL', 'SALES_TEAM', 'B2B_SALES', 'CONTENT_TEAM'];
+    const value = allowed.includes(functionalTeam) ? functionalTeam : 'ALL';
+    await prisma.user.update({ where: { id: req.params.userId }, data: { functionalTeam: value } });
+    res.json({ message: 'Functional team updated', functionalTeam: value });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update functional team' });
   }
 });
 
