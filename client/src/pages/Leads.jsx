@@ -180,10 +180,10 @@ export default function Leads() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-brand-600/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-bold text-brand-400">{lead.fullName[0]}</span>
+                          <span className="text-xs font-bold text-brand-400">{(lead.fullName || lead.company || '?')[0]}</span>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-white group-hover:text-brand-400 transition-colors">{lead.fullName}</p>
+                          <p className="text-sm font-medium text-white group-hover:text-brand-400 transition-colors">{lead.fullName || lead.company || 'Unnamed lead'}</p>
                           {lead.company && <p className="text-[10px] text-gray-500">{lead.company}</p>}
                         </div>
                       </div>
@@ -296,7 +296,7 @@ function AddLeadModal({ onClose, onAdded }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.fullName || !form.phone) { toast.error('Name and phone required'); return; }
+    if (!form.phone) { toast.error('Phone is required'); return; }
     setLoading(true);
     try {
       const res = await api.post('/leads', form);
@@ -325,7 +325,7 @@ function AddLeadModal({ onClose, onAdded }) {
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <input type="text" placeholder="Full Name *" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} className="input-field text-sm" required />
+            <input type="text" placeholder="Full Name (optional)" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} className="input-field text-sm" />
             <input type="tel" placeholder="Phone *" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="input-field text-sm" required />
           </div>
           <div className="grid grid-cols-2 gap-3">

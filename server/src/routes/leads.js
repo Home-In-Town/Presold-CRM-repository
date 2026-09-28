@@ -150,14 +150,20 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   try {
     const { fullName, phone, email, company, location, locationLink, budget, timeline, source, temperature, priority, leadType, adsRunning, notes } = req.body;
-    if (!fullName || !phone) return res.status(400).json({ error: 'Name and phone required' });
+    if (!phone) return res.status(400).json({ error: 'Phone is required' });
+
+    // Name is optional. Fall back to the company name, else a placeholder,
+    // so a lead always has a usable display name.
+    const resolvedName = (fullName && fullName.trim())
+      || (company && company.trim())
+      || 'Unnamed lead';
 
     // Resolve coordinates from a pasted Google Maps link (expands short links).
     const coords = locationLink ? await resolveLatLngFromMapsLink(locationLink) : null;
 
     const lead = await prisma.lead.create({
       data: {
-        fullName, phone, email, company, location, budget, timeline,
+        fullName: resolvedName, phone, email, company, location, budget, timeline,
         leadType: leadType || 'INDIVIDUAL',
         source: source || 'INSTAGRAM_DM',
         temperature: temperature || 'WARM',

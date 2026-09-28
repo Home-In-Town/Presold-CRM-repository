@@ -825,7 +825,7 @@ function LeadCard({ lead, userPos, currentUser, onOpenDetail }) {
         <div className="relative w-12 h-12 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
           {photoUrl
             ? <img src={photoUrl} alt={lead.fullName} className="w-full h-full object-cover" />
-            : <span className="text-base font-bold text-brand-400/60">{lead.fullName[0]}</span>}
+            : <span className="text-base font-bold text-brand-400/60">{(lead.fullName || lead.company || '?')[0]}</span>}
           <span className="absolute top-0.5 left-0 bg-emerald-600 text-white text-[6px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r shadow leading-none">Lead</span>
         </div>
         <div className="flex-1 min-w-0">
