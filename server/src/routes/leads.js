@@ -5,13 +5,12 @@ import { resolveLatLngFromMapsLink } from '../utils/geo.js';
 
 const router = Router();
 
-// Helper: build role-based where clause — non-admin users ONLY see their own leads
-function roleWhere(user) {
-  if (user.role === 'ADMIN' || user.role === 'QUALIFIER') {
-    return { deletedAt: { isSet: false } };
-  }
-  // All other roles only see their own leads
-  return { deletedAt: { isSet: false }, assignedToId: user.id };
+// Helper: build role-based where clause.
+// Every authenticated user can now SEE all leads. Ownership only matters for
+// edit/delete actions and the "assigned to / added by" attribution, which is
+// stripped from responses for non-admin/non-qualifier users.
+function roleWhere() {
+  return { deletedAt: { isSet: false } };
 }
 
 // GET /leads/assignable-users — admin/qualifier gets list of active users for assignment dropdown
@@ -40,8 +39,9 @@ router.get('/', authenticate, async (req, res) => {
     } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Base filter locked by role — sales exec cannot override this
-    const where = roleWhere(req.user);
+    // Base filter — every user sees all leads.
+    const where = roleWhere();
+    const canSeeAttribution = req.user.role === 'ADMIN' || req.user.role === 'QUALIFIER';
 
     // Admin/Qualifier can additionally filter by assignedTo
     if (assignedTo && (req.user.role === 'ADMIN' || req.user.role === 'QUALIFIER')) {
@@ -94,10 +94,20 @@ router.get('/', authenticate, async (req, res) => {
       });
       creatorsMap = Object.fromEntries(creators.map(c => [c.id, c.name]));
     }
-    const leadsWithCreator = leads.map(l => ({
-      ...l,
-      createdByName: l.createdById ? (creatorsMap[l.createdById] || null) : (l.assignedTo?.name || null)
-    }));
+    const leadsWithCreator = leads.map(l => {
+      const base = {
+        ...l,
+        createdByName: l.createdById ? (creatorsMap[l.createdById] || null) : (l.assignedTo?.name || null)
+      };
+      // Hide attribution ("added by" / "assigned to") from regular team members.
+      if (!canSeeAttribution) {
+        delete base.createdByName;
+        delete base.createdById;
+        delete base.assignedTo;
+        delete base.assignedToId;
+      }
+      return base;
+    });
 
     res.json({
       leads: leadsWithCreator,
@@ -109,17 +119,14 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// GET /leads/:id — single lead (non-admin can only view their own)
+// GET /leads/:id — single lead. Any authenticated user can view any lead.
+// Attribution ("assigned to", activity authors) is hidden from regular members.
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const where = { id: req.params.id };
-    // Enforce ownership for non-admin and non-qualifier
-    if (req.user.role !== 'ADMIN' && req.user.role !== 'QUALIFIER') {
-      where.assignedToId = req.user.id;
-    }
+    const canSeeAttribution = req.user.role === 'ADMIN' || req.user.role === 'QUALIFIER';
 
     const lead = await prisma.lead.findFirst({
-      where,
+      where: { id: req.params.id, deletedAt: { isSet: false } },
       include: {
         assignedTo: { select: { id: true, name: true, avatar: true, email: true } },
         notes: { orderBy: { createdAt: 'desc' } },
@@ -138,8 +145,23 @@ router.get('/:id', authenticate, async (req, res) => {
     });
 
     if (!lead) {
-      return res.status(404).json({ error: 'Lead not found or access denied' });
+      return res.status(404).json({ error: 'Lead not found' });
     }
+
+    // Strip attribution for regular team members.
+    if (!canSeeAttribution) {
+      delete lead.assignedTo;
+      delete lead.assignedToId;
+      delete lead.createdById;
+      // Keep activities but remove who performed them.
+      if (Array.isArray(lead.activities)) {
+        lead.activities = lead.activities.map(a => {
+          const { user, ...rest } = a;
+          return rest;
+        });
+      }
+    }
+
     res.json(lead);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch lead' });
@@ -222,19 +244,15 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
-// PUT /leads/:id — update (sales exec can only update their own)
+// PUT /leads/:id — update. Any team member can update a lead (stage, notes,
+// status, etc.). Only admins may reassign a lead to another user.
 router.put('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
 
-    // Ownership check
-    const existing = await prisma.lead.findFirst({
-      where: req.user.role !== 'ADMIN'
-        ? { id, assignedToId: req.user.id }
-        : { id }
-    });
-    if (!existing) return res.status(404).json({ error: 'Lead not found or access denied' });
+    const existing = await prisma.lead.findFirst({ where: { id, deletedAt: { isSet: false } } });
+    if (!existing) return res.status(404).json({ error: 'Lead not found' });
 
     let xpGain = 0;
     if (data.stage && data.stage !== existing.stage) {
@@ -299,11 +317,9 @@ router.post('/:id/notes', authenticate, async (req, res) => {
     const { content } = req.body;
     // verify access
     const lead = await prisma.lead.findFirst({
-      where: req.user.role !== 'ADMIN'
-        ? { id: req.params.id, assignedToId: req.user.id }
-        : { id: req.params.id }
+      where: { id: req.params.id, deletedAt: { isSet: false } }
     });
-    if (!lead) return res.status(404).json({ error: 'Lead not found or access denied' });
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
     const note = await prisma.leadNote.create({ data: { content, leadId: req.params.id } });
     await prisma.leadActivity.create({

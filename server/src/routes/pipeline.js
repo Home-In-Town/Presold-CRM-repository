@@ -4,11 +4,9 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
-// Reusable isolation helper — non-admin users only see their own leads
+// Every authenticated user can see all leads in the pipeline.
 function ownLeadWhere(user, extra = {}) {
-  const base = { deletedAt: { isSet: false }, ...extra };
-  if (user.role !== 'ADMIN' && user.role !== 'QUALIFIER') base.assignedToId = user.id;
-  return base;
+  return { deletedAt: { isSet: false }, ...extra };
 }
 
 // Read configured pipeline stages (JSON array of { key, label }) from settings.
