@@ -150,14 +150,44 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   try {
     const { fullName, phone, email, company, location, locationLink, budget, timeline, source, temperature, priority, leadType, adsRunning, notes } = req.body;
-    if (!fullName || !phone) return res.status(400).json({ error: 'Name and phone required' });
+
+    const trimmedName    = (fullName || '').trim();
+    const trimmedCompany = (company || '').trim();
+
+    // No single field is mandatory, but require at least one identifier so we
+    // never create a completely empty lead.
+    if (!trimmedName && !trimmedCompany && !(phone || '').trim()) {
+      return res.status(400).json({ error: 'Enter a name, company or phone' });
+    }
+
+    // Duplicate detection — reject if a lead with the same name OR same company
+    // already exists (case-insensitive), scoped to non-deleted leads.
+    const dupOr = [];
+    if (trimmedName)    dupOr.push({ fullName: { equals: trimmedName, mode: 'insensitive' } });
+    if (trimmedCompany) dupOr.push({ company:  { equals: trimmedCompany, mode: 'insensitive' } });
+    if (dupOr.length > 0) {
+      const existing = await prisma.lead.findFirst({
+        where: { deletedAt: { isSet: false }, OR: dupOr },
+        select: { id: true, fullName: true, company: true }
+      });
+      if (existing) {
+        const matchedBy = (trimmedName && existing.fullName?.toLowerCase() === trimmedName.toLowerCase())
+          ? `name "${existing.fullName}"`
+          : `company "${existing.company}"`;
+        return res.status(409).json({ error: `Lead already exists with ${matchedBy}` });
+      }
+    }
+
+    // Name is optional. Fall back to the company name, else a placeholder,
+    // so a lead always has a usable display name.
+    const resolvedName = trimmedName || trimmedCompany || 'Unnamed lead';
 
     // Resolve coordinates from a pasted Google Maps link (expands short links).
     const coords = locationLink ? await resolveLatLngFromMapsLink(locationLink) : null;
 
     const lead = await prisma.lead.create({
       data: {
-        fullName, phone, email, company, location, budget, timeline,
+        fullName: resolvedName, phone, email, company, location, budget, timeline,
         leadType: leadType || 'INDIVIDUAL',
         source: source || 'INSTAGRAM_DM',
         temperature: temperature || 'WARM',

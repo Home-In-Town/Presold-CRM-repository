@@ -292,10 +292,10 @@ export default function LeadDetail() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-brand-600/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-base font-bold text-brand-400">{lead.fullName[0]}</span>
+              <span className="text-base font-bold text-brand-400">{(lead.fullName || lead.company || '?')[0]}</span>
             </div>
             <div className="min-w-0">
-              <h1 className="text-base font-bold text-white truncate">{lead.fullName}</h1>
+              <h1 className="text-base font-bold text-white truncate">{lead.fullName || lead.company || 'Unnamed lead'}</h1>
               <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-500 flex-wrap">
                 {lead.company && <span className="flex items-center gap-1"><Building2 size={10} /> {lead.company}</span>}
                 {lead.location && <span className="flex items-center gap-1"><MapPin size={10} /> {lead.location}</span>}

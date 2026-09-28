@@ -180,10 +180,10 @@ export default function Leads() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-brand-600/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-bold text-brand-400">{lead.fullName[0]}</span>
+                          <span className="text-xs font-bold text-brand-400">{(lead.fullName || lead.company || '?')[0]}</span>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-white group-hover:text-brand-400 transition-colors">{lead.fullName}</p>
+                          <p className="text-sm font-medium text-white group-hover:text-brand-400 transition-colors">{lead.fullName || lead.company || 'Unnamed lead'}</p>
                           {lead.company && <p className="text-[10px] text-gray-500">{lead.company}</p>}
                         </div>
                       </div>
@@ -296,7 +296,11 @@ function AddLeadModal({ onClose, onAdded }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.fullName || !form.phone) { toast.error('Name and phone required'); return; }
+    // Require at least one identifying detail so we don't create empty leads.
+    if (!form.fullName?.trim() && !form.company?.trim() && !form.phone?.trim()) {
+      toast.error('Enter a name, company or phone');
+      return;
+    }
     setLoading(true);
     try {
       const res = await api.post('/leads', form);
@@ -310,6 +314,7 @@ function AddLeadModal({ onClose, onAdded }) {
       toast.success('+5 XP — Lead added! 🎯');
       onAdded();
     } catch (err) {
+      // Server returns 409 with a clear message when a duplicate lead exists.
       toast.error(err.response?.data?.error || 'Failed to add lead');
     }
     setLoading(false);
@@ -325,8 +330,8 @@ function AddLeadModal({ onClose, onAdded }) {
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <input type="text" placeholder="Full Name *" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} className="input-field text-sm" required />
-            <input type="tel" placeholder="Phone *" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="input-field text-sm" required />
+            <input type="text" placeholder="Full Name" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} className="input-field text-sm" />
+            <input type="tel" placeholder="Phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="input-field text-sm" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <input type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="input-field text-sm" />
@@ -336,7 +341,7 @@ function AddLeadModal({ onClose, onAdded }) {
             <input type="text" placeholder="Location" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="input-field text-sm" />
             <input type="text" placeholder="Budget" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} className="input-field text-sm" />
           </div>
-          <input type="url" placeholder="Google Maps location link (optional)" value={form.locationLink} onChange={e => setForm({ ...form, locationLink: e.target.value })} className="input-field text-sm w-full" />
+          <input type="url" placeholder="Google Maps location link" value={form.locationLink} onChange={e => setForm({ ...form, locationLink: e.target.value })} className="input-field text-sm w-full" />
           <div className="grid grid-cols-2 gap-3">
             <select value={form.leadType} onChange={e => setForm({ ...form, leadType: e.target.value })} className="input-field text-sm">
               {LEAD_TYPES.map(type => <option key={type} value={type}>{type.replace('_', ' ')}</option>)}
@@ -363,7 +368,7 @@ function AddLeadModal({ onClose, onAdded }) {
               {form.adsRunning ? 'YES' : 'NO'}
             </span>
           </label>
-          <textarea placeholder="Notes (optional)" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="input-field text-sm resize-none h-20" />
+          <textarea placeholder="Notes" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="input-field text-sm resize-none h-20" />
 
           {/* Photo upload — shown on the lead's task card */}
           <div className="flex items-center gap-3">
