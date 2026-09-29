@@ -839,8 +839,8 @@ function LeadCard({ lead, userPos, currentUser, onOpenDetail }) {
           <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1 mt-1">
             <PriorityBadge priority={lead.priority} />
             {dist != null && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-300">
-                <Navigation size={10} />{formatDistance(dist)}
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-brand-300">
+                <Navigation size={10} />{formatDistance(dist)} away
               </span>
             )}
             {lead.locationLink && (

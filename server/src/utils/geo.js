@@ -186,6 +186,62 @@ async function expandShortLink(link) {
 }
 
 /**
+ * Geocode a free-text place/address to coordinates using OpenStreetMap's
+ * Nominatim service (free, no API key). Best-effort — returns null on failure.
+ *
+ * @param {string} query  e.g. "Nagpur, Maharashtra" or a full address
+ * @returns {Promise<{ lat: number, lng: number } | null>}
+ */
+export async function geocodeText(query) {
+  if (!query || typeof query !== 'string' || !query.trim()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query.trim())}`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { 'User-Agent': 'PreSoldCRM/1.0 (lead geocoding)' }
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Resolve coordinates for a lead from the best available signal:
+ *   1. A Google Maps link that contains coordinates.
+ *   2. Otherwise, geocode the free-text location/address/company.
+ *
+ * @param {{ locationLink?: string, location?: string, company?: string }} opts
+ * @returns {Promise<{ lat: number, lng: number } | null>}
+ */
+export async function resolveLeadCoords({ locationLink, location, company } = {}) {
+  // Prefer an explicit maps link with coordinates.
+  if (locationLink) {
+    const fromLink = await resolveLatLngFromMapsLink(locationLink);
+    if (fromLink) return fromLink;
+  }
+  // Fall back to geocoding the text location (or company as a last resort).
+  const textQuery = (location && location.trim()) || (company && company.trim());
+  if (textQuery) {
+    const fromText = await geocodeText(textQuery);
+    if (fromText) return fromText;
+  }
+  return null;
+}
+
+/**
  * Resolve coordinates from any Google Maps link, expanding short links first
  * when necessary. Async because short links require a network round-trip.
  *
