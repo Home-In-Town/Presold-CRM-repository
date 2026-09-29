@@ -227,16 +227,42 @@ export async function geocodeText(query) {
  * @returns {Promise<{ lat: number, lng: number } | null>}
  */
 export async function resolveLeadCoords({ locationLink, location, company } = {}) {
-  // Prefer an explicit maps link with coordinates.
+  // Prefer an explicit maps link with coordinates — this is the only source
+  // that gives a precise, per-lead position.
   if (locationLink) {
     const fromLink = await resolveLatLngFromMapsLink(locationLink);
     if (fromLink) return fromLink;
   }
-  // Fall back to geocoding the text location (or company as a last resort).
-  const textQuery = (location && location.trim()) || (company && company.trim());
-  if (textQuery) {
-    const fromText = await geocodeText(textQuery);
-    if (fromText) return fromText;
+
+  // Otherwise geocode the text location. Full free-text addresses (with company
+  // names, plot numbers etc.) often fail in Nominatim, so we try progressively
+  // simpler queries: the full location, then the "locality, city PIN" tail,
+  // then just the locality, then the city/company.
+  const loc = (location || '').trim();
+  const co  = (company || '').trim();
+
+  const candidates = [];
+  if (loc) candidates.push(loc);
+
+  // Extract the last 2–3 comma-separated parts (usually locality, city, PIN).
+  if (loc.includes(',')) {
+    const parts = loc.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 2) candidates.push(parts.slice(-3).join(', '));
+    if (parts.length >= 2) candidates.push(parts.slice(-2).join(', '));
+    // Locality alone (first meaningful part).
+    candidates.push(parts[0]);
+  }
+
+  if (co) candidates.push(co);
+
+  // De-dup while preserving order.
+  const seen = new Set();
+  for (const q of candidates) {
+    const key = q.toLowerCase();
+    if (!q || seen.has(key)) continue;
+    seen.add(key);
+    const r = await geocodeText(q);
+    if (r) return r;
   }
   return null;
 }
