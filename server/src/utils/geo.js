@@ -186,6 +186,83 @@ async function expandShortLink(link) {
 }
 
 /**
+ * Geocode a free-text place/address to coordinates using OpenStreetMap's
+ * Nominatim service (free, no API key). Best-effort — returns null on failure.
+ *
+ * @param {string} query  e.g. "Nagpur, Maharashtra" or a full address
+ * @returns {Promise<{ lat: number, lng: number } | null>}
+ */
+export async function geocodeText(query) {
+  if (!query || typeof query !== 'string' || !query.trim()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query.trim())}`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { 'User-Agent': 'PreSoldCRM/1.0 (lead geocoding)' }
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Resolve coordinates for a lead from the best available signal:
+ *   1. A Google Maps link that contains coordinates.
+ *   2. Otherwise, geocode the free-text location/address/company.
+ *
+ * @param {{ locationLink?: string, location?: string, company?: string }} opts
+ * @returns {Promise<{ lat: number, lng: number } | null>}
+ */
+export async function resolveLeadCoords({ locationLink, location, company } = {}) {
+  // Prefer an explicit maps link with coordinates — this is the only source
+  // that gives a precise, per-lead position.
+  if (locationLink) {
+    const fromLink = await resolveLatLngFromMapsLink(locationLink);
+    if (fromLink) return fromLink;
+  }
+
+  // Otherwise geocode the text LOCATION only. We deliberately do NOT geocode
+  // the company name — it's ambiguous and produces wildly wrong matches
+  // (e.g. a company named after a distant city). A lead with no real location
+  // simply gets no coordinates (and therefore no misleading distance).
+  const loc = (location || '').trim();
+  if (!loc) return null;
+
+  // Try progressively simpler queries: full location, "locality, city PIN"
+  // tail, then just the locality.
+  const candidates = [loc];
+  if (loc.includes(',')) {
+    const parts = loc.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 2) candidates.push(parts.slice(-3).join(', '));
+    if (parts.length >= 2) candidates.push(parts.slice(-2).join(', '));
+    candidates.push(parts[0]);
+  }
+
+  const seen = new Set();
+  for (const q of candidates) {
+    const key = q.toLowerCase();
+    if (!q || seen.has(key)) continue;
+    seen.add(key);
+    const r = await geocodeText(q);
+    if (r) return r;
+  }
+  return null;
+}
+
+/**
  * Resolve coordinates from any Google Maps link, expanding short links first
  * when necessary. Async because short links require a network round-trip.
  *

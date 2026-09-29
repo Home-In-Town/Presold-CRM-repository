@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import prisma from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
-import { resolveLatLngFromMapsLink } from '../utils/geo.js';
+import { resolveLatLngFromMapsLink, resolveLeadCoords, geocodeText } from '../utils/geo.js';
 
 const router = Router();
 
@@ -12,6 +12,42 @@ const router = Router();
 function roleWhere() {
   return { deletedAt: { isSet: false } };
 }
+
+// POST /leads/backfill-coords — admin fills coordinates for leads that don't
+// have them yet, using their maps link or geocoding their text location.
+// Runs sequentially with a small delay to respect the free geocoder's rate limit.
+router.post('/backfill-coords', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Not allowed' });
+
+    const leads = await prisma.lead.findMany({
+      where: {
+        deletedAt: { isSet: false },
+        OR: [{ latitude: null }, { longitude: null }]
+      },
+      select: { id: true, locationLink: true, location: true, company: true }
+    });
+
+    let updated = 0;
+    for (const lead of leads) {
+      const coords = await resolveLeadCoords(lead);
+      if (coords) {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { latitude: coords.lat, longitude: coords.lng }
+        });
+        updated++;
+      }
+      // Gentle pacing for Nominatim (max ~1 req/sec).
+      await new Promise(r => setTimeout(r, 1100));
+    }
+
+    res.json({ message: `Backfilled coordinates for ${updated} of ${leads.length} leads`, updated, total: leads.length });
+  } catch (err) {
+    console.error('Backfill coords error:', err);
+    res.status(500).json({ error: 'Failed to backfill coordinates' });
+  }
+});
 
 // GET /leads/assignable-users — admin/qualifier gets list of active users for assignment dropdown
 router.get('/assignable-users', authenticate, async (req, res) => {
@@ -204,8 +240,8 @@ router.post('/', authenticate, async (req, res) => {
     // so a lead always has a usable display name.
     const resolvedName = trimmedName || trimmedCompany || 'Unnamed lead';
 
-    // Resolve coordinates from a pasted Google Maps link (expands short links).
-    const coords = locationLink ? await resolveLatLngFromMapsLink(locationLink) : null;
+    // Resolve coordinates: maps link first, else geocode the text location.
+    const coords = await resolveLeadCoords({ locationLink, location, company: trimmedCompany });
 
     const lead = await prisma.lead.create({
       data: {
@@ -269,6 +305,22 @@ router.put('/:id', authenticate, async (req, res) => {
 
     // Non-admin cannot reassign leads
     if (req.user.role !== 'ADMIN') delete data.assignedToId;
+
+    // Re-resolve coordinates if the maps link or location text changed, and we
+    // don't already have coords (or the location signal was updated).
+    const linkChanged = data.locationLink !== undefined && data.locationLink !== existing.locationLink;
+    const locChanged  = data.location !== undefined && data.location !== existing.location;
+    if (linkChanged || locChanged || existing.latitude == null) {
+      const coords = await resolveLeadCoords({
+        locationLink: data.locationLink ?? existing.locationLink,
+        location: data.location ?? existing.location,
+        company: data.company ?? existing.company
+      });
+      if (coords) {
+        data.latitude = coords.lat;
+        data.longitude = coords.lng;
+      }
+    }
 
     const lead = await prisma.lead.update({
       where: { id },
