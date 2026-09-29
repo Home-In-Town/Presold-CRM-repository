@@ -234,28 +234,23 @@ export async function resolveLeadCoords({ locationLink, location, company } = {}
     if (fromLink) return fromLink;
   }
 
-  // Otherwise geocode the text location. Full free-text addresses (with company
-  // names, plot numbers etc.) often fail in Nominatim, so we try progressively
-  // simpler queries: the full location, then the "locality, city PIN" tail,
-  // then just the locality, then the city/company.
+  // Otherwise geocode the text LOCATION only. We deliberately do NOT geocode
+  // the company name — it's ambiguous and produces wildly wrong matches
+  // (e.g. a company named after a distant city). A lead with no real location
+  // simply gets no coordinates (and therefore no misleading distance).
   const loc = (location || '').trim();
-  const co  = (company || '').trim();
+  if (!loc) return null;
 
-  const candidates = [];
-  if (loc) candidates.push(loc);
-
-  // Extract the last 2–3 comma-separated parts (usually locality, city, PIN).
+  // Try progressively simpler queries: full location, "locality, city PIN"
+  // tail, then just the locality.
+  const candidates = [loc];
   if (loc.includes(',')) {
     const parts = loc.split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length >= 2) candidates.push(parts.slice(-3).join(', '));
     if (parts.length >= 2) candidates.push(parts.slice(-2).join(', '));
-    // Locality alone (first meaningful part).
     candidates.push(parts[0]);
   }
 
-  if (co) candidates.push(co);
-
-  // De-dup while preserving order.
   const seen = new Set();
   for (const q of candidates) {
     const key = q.toLowerCase();
