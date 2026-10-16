@@ -314,9 +314,70 @@ export default function DashboardLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-3 lg:p-6 overflow-x-hidden overflow-y-auto min-w-0 w-full">
+        <main className="flex-1 p-3 lg:p-6 pb-20 lg:pb-6 overflow-x-hidden overflow-y-auto min-w-0 w-full">
           <Outlet />
         </main>
+
+        {/* Mobile Bottom Navigation */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-800 border-t border-white/5">
+          <div className="flex items-center justify-around px-2 py-3">
+            <NavLink
+              to="/dashboard"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                  isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
+                }`
+              }
+            >
+              <LayoutDashboard size={20} />
+              <span className="text-xs font-medium">Home</span>
+            </NavLink>
+            <NavLink
+              to="/leads"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                  isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
+                }`
+              }
+            >
+              <Users size={20} />
+              <span className="text-xs font-medium">Leads</span>
+            </NavLink>
+            <NavLink
+              to="/tasks"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                  isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
+                }`
+              }
+            >
+              <CheckSquare size={20} />
+              <span className="text-xs font-medium">Tasks</span>
+            </NavLink>
+            <NavLink
+              to="/projects"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                  isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
+                }`
+              }
+            >
+              <FolderOpen size={20} />
+              <span className="text-xs font-medium">Projects</span>
+            </NavLink>
+            <NavLink
+              to="/meetings"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                  isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
+                }`
+              }
+            >
+              <Calendar size={20} />
+              <span className="text-xs font-medium">Meetings</span>
+            </NavLink>
+          </div>
+        </nav>
       </div>
     </div>
   );
