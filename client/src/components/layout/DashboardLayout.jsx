@@ -324,7 +324,7 @@ export default function DashboardLayout() {
             <NavLink
               to="/dashboard"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
@@ -335,7 +335,7 @@ export default function DashboardLayout() {
             <NavLink
               to="/leads"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
@@ -346,7 +346,7 @@ export default function DashboardLayout() {
             <NavLink
               to="/tasks"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
@@ -355,26 +355,26 @@ export default function DashboardLayout() {
               <span className="text-xs font-medium">Tasks</span>
             </NavLink>
             <NavLink
-              to="/projects"
+              to="/pipeline"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
             >
-              <FolderOpen size={20} />
-              <span className="text-xs font-medium">Projects</span>
+              <GitBranch size={20} />
+              <span className="text-xs font-medium">Pipeline</span>
             </NavLink>
             <NavLink
-              to="/meetings"
+              to="/team"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
             >
-              <Calendar size={20} />
-              <span className="text-xs font-medium">Meetings</span>
+              <UsersRound size={20} />
+              <span className="text-xs font-medium">Team</span>
             </NavLink>
           </div>
         </nav>
