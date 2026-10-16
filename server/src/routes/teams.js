@@ -25,6 +25,12 @@ router.get('/', authenticate, async (req, res) => {
 // Get all users (admin)
 router.get('/users', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
+    // Get today's date range (start of today to start of tomorrow)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
     const users = await prisma.user.findMany({
       where: { deletedAt: { isSet: false } },
       select: {
@@ -42,6 +48,12 @@ router.get('/users', authenticate, authorize('ADMIN'), async (req, res) => {
         lastLogin: true,
         team: { select: { name: true } },
         attendanceRecords: {
+          where: {
+            checkedInAt: {
+              gte: today,
+              lt: tomorrow
+            }
+          },
           orderBy: { checkedInAt: 'desc' },
           take: 1,
           select: { checkedInAt: true, checkedOutAt: true }
