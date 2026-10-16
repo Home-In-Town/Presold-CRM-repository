@@ -23,6 +23,8 @@ import taskRoutes from './routes/tasks.js';
 import settingsRoutes from './routes/settings.js';
 import aiRoutes from './routes/ai.js';
 import dayplanRoutes from './routes/dayplan.js';
+import meetingRoutes from './routes/meetings.js';
+import locationRoutes from './routes/location.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 5001);
@@ -103,6 +105,8 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/dayplan', dayplanRoutes);
+app.use('/api/meetings', meetingRoutes);
+app.use('/api/location', locationRoutes);
 
 // Health
 app.get('/api/health', async (req, res) => {

@@ -21,6 +21,8 @@ import DayPlan from './pages/DayPlan';
 import PlaybookB2B from './pages/PlaybookB2B';
 import PlaybookDMA from './pages/PlaybookDMA';
 import PlaybookContent from './pages/PlaybookContent';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
 
 // Smart playbook router — renders the correct playbook based on user role
 function PlaybookRouter() {
@@ -136,6 +138,8 @@ export default function App() {
         <Route path="ai" element={<AIAssistant />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="90-day-plan" element={<DayPlan />} />
+        <Route path="projects" element={<Projects />} />
+        <Route path="projects/:id" element={<ProjectDetail />} />
       </Route>
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
