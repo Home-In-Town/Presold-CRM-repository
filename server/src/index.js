@@ -25,6 +25,7 @@ import aiRoutes from './routes/ai.js';
 import dayplanRoutes from './routes/dayplan.js';
 import meetingRoutes from './routes/meetings.js';
 import locationRoutes from './routes/location.js';
+import projectRoutes from './routes/projects.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 5001);
@@ -107,6 +108,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/dayplan', dayplanRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/location', locationRoutes);
+app.use('/api/projects', projectRoutes);
 
 // Health
 app.get('/api/health', async (req, res) => {
