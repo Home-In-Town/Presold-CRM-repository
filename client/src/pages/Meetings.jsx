@@ -20,11 +20,14 @@ export default function Meetings() {
     try {
       setLoading(true);
       const endpoint = user?.role === 'ADMIN' ? '/meetings/admin/all' : '/meetings';
+      console.log('Loading meetings from:', endpoint);
       const res = await api.get(endpoint);
-      setMeetings(res.data || []);
+      console.log('Meetings response:', res.data);
+      setMeetings(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to load meetings:', err);
-      toast.error('Failed to load meetings');
+      console.error('Error details:', err.response?.data);
+      toast.error(err.response?.data?.error || 'Failed to load meetings');
       setMeetings([]);
     } finally {
       setLoading(false);

@@ -31,12 +31,16 @@ export default function AdminLocationMonitor() {
   const loadUsers = async () => {
     try {
       if (!loading) setRefreshing(true);
+      console.log('Loading users for location monitor...');
       const res = await api.get('/location/users');
-      setUsers(res.data || []);
+      console.log('Location users response:', res.data);
+      setUsers(Array.isArray(res.data) ? res.data : []);
       setLastUpdate(new Date());
     } catch (err) {
       console.error('Failed to load users:', err);
-      toast.error('Failed to load users');
+      console.error('Error response:', err.response?.data);
+      toast.error(err.response?.data?.error || 'Failed to load users');
+      setUsers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -45,11 +49,14 @@ export default function AdminLocationMonitor() {
 
   const loadUserLocationHistory = async (userId) => {
     try {
+      console.log('Loading location history for user:', userId);
       const res = await api.get(`/location/history/${userId}?limit=50`);
-      setLocationHistory(res.data || []);
+      console.log('Location history response:', res.data);
+      setLocationHistory(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to load location history:', err);
-      toast.error('Failed to load location history');
+      console.error('Error response:', err.response?.data);
+      toast.error(err.response?.data?.error || 'Failed to load location history');
       setLocationHistory([]);
     }
   };

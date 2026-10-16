@@ -25,6 +25,7 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Meetings from './pages/Meetings';
 import AdminLocationMonitor from './pages/AdminLocationMonitor';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Smart playbook router — renders the correct playbook based on user role
 function PlaybookRouter() {
@@ -140,10 +141,10 @@ export default function App() {
         <Route path="ai" element={<AIAssistant />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="90-day-plan" element={<DayPlan />} />
-        <Route path="projects" element={<Projects />} />
-        <Route path="projects/:id" element={<ProjectDetail />} />
-        <Route path="meetings" element={<Meetings />} />
-        <Route path="location-monitor" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><AdminLocationMonitor /></RoleProtectedRoute>} />
+        <Route path="projects" element={<ErrorBoundary><Projects /></ErrorBoundary>} />
+        <Route path="projects/:id" element={<ErrorBoundary><ProjectDetail /></ErrorBoundary>} />
+        <Route path="meetings" element={<ErrorBoundary><Meetings /></ErrorBoundary>} />
+        <Route path="location-monitor" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><AdminLocationMonitor /></ErrorBoundary></RoleProtectedRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
