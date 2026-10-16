@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, GitBranch, BookOpen, FileText, Trophy, BarChart3,
   FolderOpen, Settings, Bot, CheckSquare, Menu, X, Bell, Search,
-  LogOut, ChevronLeft, UserCircle, UsersRound, CheckCheck, Calendar
+  LogOut, ChevronLeft, UserCircle, UsersRound, CheckCheck, Calendar, MapPin
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -17,7 +17,10 @@ const navItems = [
   { path: '/playbook', label: 'Playbook', icon: BookOpen },
   { path: '/content', label: 'Content', icon: FileText },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare },
+  { path: '/projects', label: 'Projects', icon: FolderOpen },
+  { path: '/meetings', label: 'Meetings', icon: Calendar },
   { path: '/90-day-plan', label: '90-Day Plan', icon: Calendar },
+  { path: '/location-monitor', label: 'Location', icon: MapPin },
   { path: '/ai', label: 'AI Assistant', icon: Bot },
   { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
@@ -99,17 +102,22 @@ export default function DashboardLayout() {
 
   // All roles just use /playbook — the PlaybookRouter in App.jsx renders the correct one
   const visibleNavItems = navItems.filter(item => {
+    // Location monitor - admin only
+    if (item.path === '/location-monitor') {
+      return user?.role === 'ADMIN';
+    }
+    
     // Qualifier — sees leads, pipeline, dashboard, assets, settings
     if (user?.role === 'QUALIFIER') {
       return ['/dashboard', '/leads', '/pipeline', '/assets', '/tasks', '/reports', '/90-day-plan', '/settings'].includes(item.path);
     }
     // DMA White Label team
     if (user?.role === 'DMA_WHITE_LABEL') {
-      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
+      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/projects', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
     }
     // B2B Sales team
     if (user?.role === 'B2B_SALES') {
-      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
+      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/projects', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
     }
     // Content creators
     if (user?.role === 'CONTENT_CREATION') {
@@ -117,7 +125,7 @@ export default function DashboardLayout() {
     }
     // Sales executives
     if (user?.role === 'SALES_EXECUTIVE') {
-      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
+      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/projects', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
     }
     // Admin sees everything except Content (content is for CONTENT_CREATION only)
     return item.path !== '/content';
@@ -324,7 +332,7 @@ export default function DashboardLayout() {
             <NavLink
               to="/dashboard"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
@@ -335,7 +343,7 @@ export default function DashboardLayout() {
             <NavLink
               to="/leads"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
@@ -346,7 +354,7 @@ export default function DashboardLayout() {
             <NavLink
               to="/tasks"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
@@ -355,26 +363,26 @@ export default function DashboardLayout() {
               <span className="text-xs font-medium">Tasks</span>
             </NavLink>
             <NavLink
-              to="/pipeline"
+              to="/projects"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
             >
-              <GitBranch size={20} />
-              <span className="text-xs font-medium">Pipeline</span>
+              <FolderOpen size={20} />
+              <span className="text-xs font-medium">Projects</span>
             </NavLink>
             <NavLink
-              to="/team"
+              to="/meetings"
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
+                `flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors ${
                   isActive ? 'text-brand-400' : 'text-gray-400 hover:text-white'
                 }`
               }
             >
-              <UsersRound size={20} />
-              <span className="text-xs font-medium">Team</span>
+              <Calendar size={20} />
+              <span className="text-xs font-medium">Meetings</span>
             </NavLink>
           </div>
         </nav>
