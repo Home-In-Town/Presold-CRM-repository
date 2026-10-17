@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, Camera, Upload, MapPin, Mic, Square, Play, Pause, User, Phone, Building2, Calendar, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
