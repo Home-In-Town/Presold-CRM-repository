@@ -127,6 +127,7 @@ export default function Dashboard() {
   const myTeam = teamLabels[user?.role] || { label: user?.role?.replace('_', ' '), color: 'bg-gray-500/15 text-gray-400 border-gray-500/30' };
 
   return (
+    <>
     <div className="space-y-6">
       {/* Welcome */}
       <motion.div {...fadeUp} className="flex items-center justify-between">
