@@ -9,6 +9,7 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
+import CheckInOutButton from '../components/CheckInOutButton';
 
 const fadeUp = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
 
@@ -364,5 +365,9 @@ export default function Dashboard() {
         </div>
       </motion.div>
     </div>
+
+      {/* Check-In/Out Button (Only for non-admin users) */}
+      {user?.role !== 'ADMIN' && <CheckInOutButton />}
+    </>
   );
 }
