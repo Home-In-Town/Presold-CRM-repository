@@ -548,6 +548,7 @@ model Project {
   longitude           Float?
   city                String
   locationArea        String
+  locationAddress     String?   // Full address
   googleMapLink       String?
   
   // RERA Details

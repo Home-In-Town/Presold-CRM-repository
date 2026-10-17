@@ -311,7 +311,10 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
       onSuccess();
     } catch (err) {
       console.error('Failed to add project:', err);
-      toast.error(err.response?.data?.error || 'Failed to add project');
+      console.error('Error response:', err.response?.data);
+      console.error('Error status:', err.response?.status);
+      const errorMessage = err.response?.data?.error || err.response?.data?.details || 'Failed to add project';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
