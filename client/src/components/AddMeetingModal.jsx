@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { X, Camera, Upload, MapPin, Mic, Square, Play, Pause, Search, User, Phone, Building2, Calendar, Clock } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { X, Camera, Upload, MapPin, Mic, Square, Play, Pause, User, Phone, Building2, Calendar, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -37,11 +37,6 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
-
-  // Lead search
-  const [leadSearch, setLeadSearch] = useState('');
-  const [leadResults, setLeadResults] = useState([]);
-  const [showLeadDropdown, setShowLeadDropdown] = useState(false);
 
   // Camera refs
   const videoRef = useRef(null);
@@ -194,42 +189,6 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
     toast.info('Recording deleted');
   };
 
-  // Search leads
-  const searchLeads = async (query) => {
-    if (!query || query.length < 2) {
-      setLeadResults([]);
-      return;
-    }
-
-    try {
-      const res = await api.get(`/leads?search=${encodeURIComponent(query)}&limit=10`);
-      setLeadResults(res.data.leads || []);
-      setShowLeadDropdown(true);
-    } catch (err) {
-      console.error('Failed to search leads:', err);
-    }
-  };
-
-  const selectLead = (lead) => {
-    setFormData(prev => ({
-      ...prev,
-      leadId: lead.id,
-      leadName: lead.name,
-      personContact: lead.phone || ''
-    }));
-    setLeadSearch(lead.name);
-    setShowLeadDropdown(false);
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (leadSearch && !formData.leadId) {
-        searchLeads(leadSearch);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [leadSearch]);
-
   // Format recording time
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -262,8 +221,8 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
           toast.error('Role is required (Owner/PO/Broker)');
           return false;
         }
-        if (!formData.leadId) {
-          toast.error('Please select a lead');
+        if (!formData.leadName.trim()) {
+          toast.error('Person name is required');
           return false;
         }
         if (!formData.personContact.trim()) {
@@ -308,7 +267,6 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
       submitData.append('role', formData.role);
       submitData.append('personName', formData.leadName);
       submitData.append('personContact', formData.personContact);
-      submitData.append('leadId', formData.leadId);
       
       if (formData.officeLatitude) submitData.append('latitude', formData.officeLatitude);
       if (formData.officeLongitude) submitData.append('longitude', formData.officeLongitude);
@@ -523,41 +481,18 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
             {step === 2 && (
               <div className="space-y-6">
                 {/* Lead Search */}
-                <div className="relative">
+                {/* Person Name */}
+                <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Select Lead * (Search and select)
+                    Person Name *
                   </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                    <input
-                      type="text"
-                      value={leadSearch}
-                      onChange={(e) => {
-                        setLeadSearch(e.target.value);
-                        setFormData({ ...formData, leadId: '', leadName: '' });
-                      }}
-                      onFocus={() => leadResults.length > 0 && setShowLeadDropdown(true)}
-                      placeholder="Search leads by name, phone, or email..."
-                      className="input w-full pl-10"
-                    />
-                  </div>
-                  {showLeadDropdown && leadResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-2 bg-dark-700 rounded-lg border border-white/10 max-h-48 overflow-y-auto">
-                      {leadResults.map(lead => (
-                        <button
-                          key={lead.id}
-                          onClick={() => selectLead(lead)}
-                          className="w-full px-4 py-3 text-left hover:bg-white/5 border-b border-white/5 last:border-0"
-                        >
-                          <p className="text-white font-medium">{lead.name}</p>
-                          <p className="text-sm text-gray-400">{lead.phone} • {lead.email}</p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {formData.leadId && (
-                    <p className="mt-2 text-sm text-green-400">✓ Selected: {formData.leadName}</p>
-                  )}
+                  <input
+                    type="text"
+                    value={formData.leadName}
+                    onChange={(e) => setFormData({ ...formData, leadName: e.target.value })}
+                    placeholder="Enter person's name"
+                    className="input w-full"
+                  />
                 </div>
 
                 {/* Contact Number */}
