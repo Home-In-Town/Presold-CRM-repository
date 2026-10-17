@@ -256,4 +256,177 @@ router.get('/history', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/attendance/admin/monthly-report - Admin only: Get monthly attendance report for all users
+router.get('/admin/monthly-report', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { month, year } = req.query;
+    
+    let startDate, endDate;
+    if (month && year) {
+      startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
+    } else {
+      // Default to current month
+      const now = new Date();
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    }
+
+    // Get all check-ins for the selected month
+    const checkIns = await trackingDb.checkInOut.findMany({
+      where: {
+        checkInTime: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      orderBy: {
+        checkInTime: 'desc'
+      }
+    });
+
+    // Import prisma from main database to get user info
+    const { default: prisma } = await import('../config/database.js');
+    
+    // For each check-in, get user info
+    const recordsWithUserInfo = await Promise.all(
+      checkIns.map(async (checkIn) => {
+        // Get user from main database
+        const user = await prisma.user.findUnique({
+          where: { id: checkIn.userId },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        });
+
+        return {
+          userId: checkIn.userId,
+          userName: user?.name || 'Unknown',
+          userEmail: user?.email || '',
+          status: checkIn.status,
+          checkInTime: checkIn.checkInTime,
+          checkOutTime: checkIn.checkOutTime,
+          checkIn: {
+            time: checkIn.checkInTime,
+            lat: checkIn.checkInLat,
+            lng: checkIn.checkInLng,
+            address: checkIn.checkInAddress
+          },
+          checkOut: checkIn.checkOutTime ? {
+            time: checkIn.checkOutTime,
+            lat: checkIn.checkOutLat,
+            lng: checkIn.checkOutLng,
+            address: checkIn.checkOutAddress
+          } : null
+        };
+      })
+    );
+
+    res.json({ records: recordsWithUserInfo });
+  } catch (err) {
+    console.error('Monthly report error:', err);
+    res.status(500).json({ error: 'Failed to fetch monthly report' });
+  }
+});
+
+// GET /api/attendance/admin/all-locations - Admin only: Get all users' current locations and routes
+router.get('/admin/all-locations', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Get all check-ins for today
+    const checkIns = await trackingDb.checkInOut.findMany({
+      where: {
+        checkInTime: {
+          gte: today,
+          lt: tomorrow
+        }
+      },
+      orderBy: {
+        checkInTime: 'desc'
+      }
+    });
+
+    // Import prisma from main database to get user info
+    const { default: prisma } = await import('../config/database.js');
+    
+    // For each check-in, get user info and location history
+    const usersWithLocations = await Promise.all(
+      checkIns.map(async (checkIn) => {
+        // Get user from main database
+        const user = await prisma.user.findUnique({
+          where: { id: checkIn.userId },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        });
+
+        // Get location history
+        const locationHistory = await trackingDb.locationHistory.findMany({
+          where: {
+            userId: checkIn.userId,
+            timestamp: {
+              gte: checkIn.checkInTime,
+              ...(checkIn.checkOutTime && { lte: checkIn.checkOutTime })
+            }
+          },
+          orderBy: {
+            timestamp: 'asc'
+          }
+        });
+
+        return {
+          userId: checkIn.userId,
+          userName: user?.name || 'Unknown',
+          userEmail: user?.email || '',
+          status: checkIn.status,
+          checkIn: {
+            time: checkIn.checkInTime,
+            lat: checkIn.checkInLat,
+            lng: checkIn.checkInLng,
+            address: checkIn.checkInAddress
+          },
+          checkOut: checkIn.checkOutTime ? {
+            time: checkIn.checkOutTime,
+            lat: checkIn.checkOutLat,
+            lng: checkIn.checkOutLng,
+            address: checkIn.checkOutAddress
+          } : null,
+          locationHistory: locationHistory.map(loc => ({
+            lat: loc.latitude,
+            lng: loc.longitude,
+            timestamp: loc.timestamp,
+            accuracy: loc.accuracy,
+            address: loc.address
+          }))
+        };
+      })
+    );
+
+    res.json({ users: usersWithLocations });
+  } catch (err) {
+    console.error('Admin all locations error:', err);
+    res.status(500).json({ error: 'Failed to fetch locations' });
+  }
+});
+
 export default router;

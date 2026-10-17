@@ -1,45 +1,52 @@
-import { useState, useEffect } from 'react';
-import { MapPin, Users, Navigation, Clock, RefreshCw, User } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { MapPin, Users, Navigation, Clock, RefreshCw, User, Activity, LogOut, LogIn } from 'lucide-react';
 import { motion } from 'framer-motion';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import MapWithRoute from '../components/MapWithRoute';
 
 export default function AdminLocationMonitor() {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [locationHistory, setLocationHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const mapRef = useRef(null);
+  const googleMapRef = useRef(null);
+  const markersRef = useRef([]);
+  const polylinesRef = useRef([]);
 
   useEffect(() => {
-    loadUsers();
+    loadAllLocations();
     // Auto-refresh every 30 seconds
     const interval = setInterval(() => {
-      loadUsers();
+      loadAllLocations();
     }, 30000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (selectedUser) {
-      loadUserLocationHistory(selectedUser.id);
+    // Initialize map when component mounts and Google Maps is loaded
+    if (window.google && mapRef.current && !googleMapRef.current) {
+      initializeMap();
     }
-  }, [selectedUser]);
+  }, []);
 
-  const loadUsers = async () => {
+  useEffect(() => {
+    // Update map markers when users data changes
+    if (googleMapRef.current && users.length > 0) {
+      updateMapMarkers();
+    }
+  }, [users, selectedUser]);
+
+  const loadAllLocations = async () => {
     try {
       if (!loading) setRefreshing(true);
-      console.log('Loading users for location monitor...');
-      const res = await api.get('/location/users');
-      console.log('Location users response:', res.data);
-      setUsers(Array.isArray(res.data) ? res.data : []);
+      const res = await api.get('/attendance/admin/all-locations');
+      setUsers(res.data.users || []);
       setLastUpdate(new Date());
     } catch (err) {
-      console.error('Failed to load users:', err);
-      console.error('Error response:', err.response?.data);
-      toast.error(err.response?.data?.error || 'Failed to load users');
+      console.error('Failed to load locations:', err);
+      toast.error(err.response?.data?.error || 'Failed to load locations');
       setUsers([]);
     } finally {
       setLoading(false);
@@ -47,17 +54,233 @@ export default function AdminLocationMonitor() {
     }
   };
 
-  const loadUserLocationHistory = async (userId) => {
-    try {
-      console.log('Loading location history for user:', userId);
-      const res = await api.get(`/location/history/${userId}?limit=50`);
-      console.log('Location history response:', res.data);
-      setLocationHistory(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error('Failed to load location history:', err);
-      console.error('Error response:', err.response?.data);
-      toast.error(err.response?.data?.error || 'Failed to load location history');
-      setLocationHistory([]);
+  const initializeMap = () => {
+    // Default center (India)
+    const defaultCenter = { lat: 20.5937, lng: 78.9629 };
+    
+    googleMapRef.current = new window.google.maps.Map(mapRef.current, {
+      center: defaultCenter,
+      zoom: 5,
+      styles: [
+        { elementType: 'geometry', stylers: [{ color: '#1a1f2e' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1f2e' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+        {
+          featureType: 'administrative.locality',
+          elementType: 'labels.text.fill',
+          stylers: [{ color: '#d59563' }]
+        },
+        {
+          featureType: 'poi',
+          elementType: 'labels.text.fill',
+          stylers: [{ color: '#d59563' }]
+        },
+        {
+          featureType: 'poi.park',
+          elementType: 'geometry',
+          stylers: [{ color: '#263c3f' }]
+        },
+        {
+          featureType: 'poi.park',
+          elementType: 'labels.text.fill',
+          stylers: [{ color: '#6b9a76' }]
+        },
+        {
+          featureType: 'road',
+          elementType: 'geometry',
+          stylers: [{ color: '#38414e' }]
+        },
+        {
+          featureType: 'road',
+          elementType: 'geometry.stroke',
+          stylers: [{ color: '#212a37' }]
+        },
+        {
+          featureType: 'road',
+          elementType: 'labels.text.fill',
+          stylers: [{ color: '#9ca5b3' }]
+        },
+        {
+          featureType: 'road.highway',
+          elementType: 'geometry',
+          stylers: [{ color: '#746855' }]
+        },
+        {
+          featureType: 'road.highway',
+          elementType: 'geometry.stroke',
+          stylers: [{ color: '#1f2835' }]
+        },
+        {
+          featureType: 'road.highway',
+          elementType: 'labels.text.fill',
+          stylers: [{ color: '#f3d19c' }]
+        },
+        {
+          featureType: 'transit',
+          elementType: 'geometry',
+          stylers: [{ color: '#2f3948' }]
+        },
+        {
+          featureType: 'transit.station',
+          elementType: 'labels.text.fill',
+          stylers: [{ color: '#d59563' }]
+        },
+        {
+          featureType: 'water',
+          elementType: 'geometry',
+          stylers: [{ color: '#17263c' }]
+        },
+        {
+          featureType: 'water',
+          elementType: 'labels.text.fill',
+          stylers: [{ color: '#515c6d' }]
+        },
+        {
+          featureType: 'water',
+          elementType: 'labels.text.stroke',
+          stylers: [{ color: '#17263c' }]
+        }
+      ]
+    });
+  };
+
+  const updateMapMarkers = () => {
+    if (!googleMapRef.current) return;
+
+    // Clear existing markers and polylines
+    markersRef.current.forEach(marker => marker.setMap(null));
+    polylinesRef.current.forEach(polyline => polyline.setMap(null));
+    markersRef.current = [];
+    polylinesRef.current = [];
+
+    if (users.length === 0) return;
+
+    const bounds = new window.google.maps.LatLngBounds();
+    const colors = ['#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6', '#EF4444'];
+
+    users.forEach((user, index) => {
+      const color = colors[index % colors.length];
+      const isSelected = selectedUser?.userId === user.userId;
+
+      // Add check-in marker
+      if (user.checkIn) {
+        const checkInMarker = new window.google.maps.Marker({
+          position: { lat: user.checkIn.lat, lng: user.checkIn.lng },
+          map: googleMapRef.current,
+          title: `${user.userName} - Check In`,
+          label: {
+            text: '🟢',
+            fontSize: '24px'
+          },
+          animation: isSelected ? window.google.maps.Animation.BOUNCE : null
+        });
+
+        const checkInInfo = new window.google.maps.InfoWindow({
+          content: `
+            <div style="color: #000; padding: 8px;">
+              <h3 style="margin: 0 0 8px 0; font-weight: bold;">${user.userName}</h3>
+              <p style="margin: 4px 0;"><strong>Check In:</strong> ${new Date(user.checkIn.time).toLocaleTimeString()}</p>
+              <p style="margin: 4px 0;"><strong>Status:</strong> ${user.status}</p>
+            </div>
+          `
+        });
+
+        checkInMarker.addListener('click', () => {
+          checkInInfo.open(googleMapRef.current, checkInMarker);
+          setSelectedUser(user);
+        });
+
+        markersRef.current.push(checkInMarker);
+        bounds.extend({ lat: user.checkIn.lat, lng: user.checkIn.lng });
+      }
+
+      // Add location history points and draw route
+      if (user.locationHistory && user.locationHistory.length > 0) {
+        const pathCoordinates = [
+          user.checkIn ? { lat: user.checkIn.lat, lng: user.checkIn.lng } : null,
+          ...user.locationHistory.map(loc => ({ lat: loc.lat, lng: loc.lng })),
+          user.checkOut ? { lat: user.checkOut.lat, lng: user.checkOut.lng } : null
+        ].filter(Boolean);
+
+        // Draw polyline for route
+        const polyline = new window.google.maps.Polyline({
+          path: pathCoordinates,
+          geodesic: true,
+          strokeColor: color,
+          strokeOpacity: isSelected ? 1.0 : 0.6,
+          strokeWeight: isSelected ? 4 : 2,
+          map: googleMapRef.current
+        });
+
+        polylinesRef.current.push(polyline);
+
+        // Add markers for location pings (smaller dots)
+        user.locationHistory.forEach((loc, idx) => {
+          const pingMarker = new window.google.maps.Marker({
+            position: { lat: loc.lat, lng: loc.lng },
+            map: googleMapRef.current,
+            title: `${user.userName} - Location ${idx + 1}`,
+            icon: {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 4,
+              fillColor: color,
+              fillOpacity: 0.8,
+              strokeColor: '#ffffff',
+              strokeWeight: 1
+            }
+          });
+
+          const pingInfo = new window.google.maps.InfoWindow({
+            content: `
+              <div style="color: #000; padding: 8px;">
+                <p style="margin: 4px 0;"><strong>${user.userName}</strong></p>
+                <p style="margin: 4px 0;">${new Date(loc.timestamp).toLocaleString()}</p>
+              </div>
+            `
+          });
+
+          pingMarker.addListener('click', () => {
+            pingInfo.open(googleMapRef.current, pingMarker);
+          });
+
+          markersRef.current.push(pingMarker);
+          bounds.extend({ lat: loc.lat, lng: loc.lng });
+        });
+      }
+
+      // Add check-out marker
+      if (user.checkOut) {
+        const checkOutMarker = new window.google.maps.Marker({
+          position: { lat: user.checkOut.lat, lng: user.checkOut.lng },
+          map: googleMapRef.current,
+          title: `${user.userName} - Check Out`,
+          label: {
+            text: '🔴',
+            fontSize: '24px'
+          }
+        });
+
+        const checkOutInfo = new window.google.maps.InfoWindow({
+          content: `
+            <div style="color: #000; padding: 8px;">
+              <h3 style="margin: 0 0 8px 0; font-weight: bold;">${user.userName}</h3>
+              <p style="margin: 4px 0;"><strong>Check Out:</strong> ${new Date(user.checkOut.time).toLocaleTimeString()}</p>
+            </div>
+          `
+        });
+
+        checkOutMarker.addListener('click', () => {
+          checkOutInfo.open(googleMapRef.current, checkOutMarker);
+        });
+
+        markersRef.current.push(checkOutMarker);
+        bounds.extend({ lat: user.checkOut.lat, lng: user.checkOut.lng });
+      }
+    });
+
+    // Fit map to show all markers
+    if (markersRef.current.length > 0) {
+      googleMapRef.current.fitBounds(bounds);
     }
   };
 
@@ -75,16 +298,14 @@ export default function AdminLocationMonitor() {
     return date.toLocaleDateString();
   };
 
-  const getActivityStatus = (lastLocation) => {
-    if (!lastLocation) return { label: 'Inactive', color: 'bg-gray-500', textColor: 'text-gray-400' };
+  const getActivityStatus = (user) => {
+    if (!user.checkIn) return { label: 'Inactive', color: 'bg-gray-500', textColor: 'text-gray-400' };
     
-    const lastUpdate = new Date(lastLocation);
-    const now = new Date();
-    const diffMins = (now - lastUpdate) / 60000;
-    
-    if (diffMins < 5) return { label: 'Active', color: 'bg-green-500', textColor: 'text-green-400' };
-    if (diffMins < 30) return { label: 'Recent', color: 'bg-yellow-500', textColor: 'text-yellow-400' };
-    return { label: 'Inactive', color: 'bg-gray-500', textColor: 'text-gray-400' };
+    if (user.status === 'CHECKED_IN') {
+      return { label: 'Active', color: 'bg-green-500', textColor: 'text-green-400' };
+    } else {
+      return { label: 'Checked Out', color: 'bg-red-500', textColor: 'text-red-400' };
+    }
   };
 
   if (loading) {
@@ -119,7 +340,7 @@ export default function AdminLocationMonitor() {
             </p>
           </div>
           <button
-            onClick={loadUsers}
+            onClick={loadAllLocations}
             disabled={refreshing}
             className="btn-secondary flex items-center gap-2"
           >
@@ -134,26 +355,26 @@ export default function AdminLocationMonitor() {
         <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-              <Users className="text-green-400" size={20} />
+              <Activity className="text-green-400" size={20} />
             </div>
             <div>
               <p className="text-2xl font-bold text-white">
-                {users.filter(u => getActivityStatus(u.lastLocationUpdate).label === 'Active').length}
+                {users.filter(u => u.status === 'CHECKED_IN').length}
               </p>
-              <p className="text-xs text-gray-400">Active Now</p>
+              <p className="text-xs text-gray-400">Checked In</p>
             </div>
           </div>
         </div>
         <div className="bg-dark-800 rounded-xl p-4 border border-white/5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
-              <Clock className="text-yellow-400" size={20} />
+            <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+              <LogOut className="text-red-400" size={20} />
             </div>
             <div>
               <p className="text-2xl font-bold text-white">
-                {users.filter(u => getActivityStatus(u.lastLocationUpdate).label === 'Recent').length}
+                {users.filter(u => u.status === 'CHECKED_OUT').length}
               </p>
-              <p className="text-xs text-gray-400">Recent Activity</p>
+              <p className="text-xs text-gray-400">Checked Out</p>
             </div>
           </div>
         </div>
@@ -164,7 +385,7 @@ export default function AdminLocationMonitor() {
             </div>
             <div>
               <p className="text-2xl font-bold text-white">{users.length}</p>
-              <p className="text-xs text-gray-400">Total Users</p>
+              <p className="text-xs text-gray-400">Total Today</p>
             </div>
           </div>
         </div>
@@ -178,16 +399,16 @@ export default function AdminLocationMonitor() {
             {users.length === 0 ? (
               <div className="bg-dark-800 rounded-xl p-6 text-center border border-white/5">
                 <Users className="mx-auto text-gray-600 mb-2" size={32} />
-                <p className="text-sm text-gray-400">No users found</p>
+                <p className="text-sm text-gray-400">No check-ins today</p>
               </div>
             ) : (
               users.map((user) => {
-                const status = getActivityStatus(user.lastLocationUpdate);
-                const isSelected = selectedUser?.id === user.id;
+                const status = getActivityStatus(user);
+                const isSelected = selectedUser?.userId === user.userId;
                 
                 return (
                   <motion.button
-                    key={user.id}
+                    key={user.userId}
                     onClick={() => setSelectedUser(user)}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -205,16 +426,34 @@ export default function AdminLocationMonitor() {
                         <span className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full ${status.color} border-2 border-dark-800`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-white truncate">{user.name}</p>
-                        <p className="text-xs text-gray-400">{user.role?.replace('_', ' ')}</p>
+                        <p className="font-medium text-white truncate">{user.userName}</p>
+                        <p className="text-xs text-gray-400 truncate">{user.userEmail}</p>
                       </div>
                       <div className="text-right">
                         <span className={`text-xs font-medium ${status.textColor}`}>
                           {status.label}
                         </span>
                         <p className="text-[10px] text-gray-500">
-                          {formatTime(user.lastLocationUpdate)}
+                          {formatTime(user.checkIn?.time)}
                         </p>
+                      </div>
+                    </div>
+
+                    {/* Additional Info */}
+                    <div className="mt-3 pt-3 border-t border-white/5 text-xs text-gray-400">
+                      <div className="flex justify-between mb-1">
+                        <span>Check In:</span>
+                        <span className="text-gray-300">{new Date(user.checkIn.time).toLocaleTimeString()}</span>
+                      </div>
+                      {user.checkOut && (
+                        <div className="flex justify-between mb-1">
+                          <span>Check Out:</span>
+                          <span className="text-gray-300">{new Date(user.checkOut.time).toLocaleTimeString()}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>Location Pings:</span>
+                        <span className="text-gray-300">{user.locationHistory?.length || 0}</span>
                       </div>
                     </div>
                   </motion.button>
@@ -229,56 +468,14 @@ export default function AdminLocationMonitor() {
           <div className="bg-dark-800 rounded-xl border border-white/5 overflow-hidden">
             <div className="p-4 border-b border-white/5">
               <h2 className="text-lg font-semibold text-white">
-                {selectedUser ? `${selectedUser.name}'s Location` : 'Select a user to view location'}
+                {selectedUser ? `${selectedUser.userName}'s Route` : 'All Team Routes'}
               </h2>
-              {selectedUser && (
-                <p className="text-sm text-gray-400 mt-1">
-                  Last updated: {formatTime(selectedUser.lastLocationUpdate)}
-                </p>
-              )}
+              <p className="text-sm text-gray-400 mt-1">
+                🟢 Check In • 🔴 Check Out • Colored dots show route
+              </p>
             </div>
-            <div className="h-[500px]">
-              {selectedUser && locationHistory.length > 0 ? (
-                <MapWithRoute locations={locationHistory} />
-              ) : (
-                <div className="h-full flex items-center justify-center bg-dark-900">
-                  <div className="text-center">
-                    <MapPin className="mx-auto text-gray-600 mb-3" size={48} />
-                    <p className="text-gray-400">
-                      {selectedUser 
-                        ? 'No location data available for this user' 
-                        : 'Select a team member to view their location'}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+            <div ref={mapRef} className="h-[600px]" />
           </div>
-
-          {/* Location History */}
-          {selectedUser && locationHistory.length > 0 && (
-            <div className="mt-6 bg-dark-800 rounded-xl border border-white/5 p-4">
-              <h3 className="text-md font-semibold text-white mb-3">Location History</h3>
-              <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                {locationHistory.slice(0, 10).map((location, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-white/5 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <MapPin size={14} className="text-brand-400" />
-                      <span className="text-gray-300">
-                        {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-500">
-                      {new Date(location.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, GitBranch, BookOpen, FileText, Trophy, BarChart3,
   FolderOpen, Settings, Bot, CheckSquare, Menu, X, Bell, Search,
-  LogOut, ChevronLeft, UserCircle, UsersRound, CheckCheck, Calendar, MapPin
+  LogOut, ChevronLeft, UserCircle, UsersRound, CheckCheck, Calendar, MapPin, ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -21,6 +21,7 @@ const navItems = [
   { path: '/meetings', label: 'Meetings', icon: Calendar },
   { path: '/90-day-plan', label: '90-Day Plan', icon: Calendar },
   { path: '/location-monitor', label: 'Location', icon: MapPin },
+  { path: '/attendance-report', label: 'Attendance', icon: ClipboardList },
   { path: '/ai', label: 'AI Assistant', icon: Bot },
   { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
@@ -102,8 +103,8 @@ export default function DashboardLayout() {
 
   // All roles just use /playbook — the PlaybookRouter in App.jsx renders the correct one
   const visibleNavItems = navItems.filter(item => {
-    // Location monitor - admin only
-    if (item.path === '/location-monitor') {
+    // Location monitor and attendance report - admin only
+    if (item.path === '/location-monitor' || item.path === '/attendance-report') {
       return user?.role === 'ADMIN';
     }
     
