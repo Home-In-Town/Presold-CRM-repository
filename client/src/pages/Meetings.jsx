@@ -25,7 +25,7 @@ export default function Meetings() {
       console.log('Loading meetings from:', endpoint);
       const res = await api.get(endpoint);
       console.log('Meetings response:', res.data);
-      setMeetings(Array.isArray(res.data) ? res.data : []);
+      setMeetings(res.data.meetings || []);
     } catch (err) {
       console.error('Failed to load meetings:', err);
       console.error('Error details:', err.response?.data);
