@@ -178,22 +178,70 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
   };
 
   // Submit form
+  const validateStep = (currentStep) => {
+    switch(currentStep) {
+      case 1:
+        // Basic Info validation
+        if (!formData.projectName.trim()) {
+          toast.error('Project name is required');
+          return false;
+        }
+        if (!formData.category) {
+          toast.error('Category is required');
+          return false;
+        }
+        if (!formData.propertyType.trim()) {
+          toast.error('Property type is required');
+          return false;
+        }
+        if (!formData.projectStatus) {
+          toast.error('Project status is required');
+          return false;
+        }
+        return true;
+
+      case 2:
+        // Location & RERA validation
+        if (!formData.city.trim()) {
+          toast.error('City is required');
+          return false;
+        }
+        if (!formData.area.trim()) {
+          toast.error('Area is required');
+          return false;
+        }
+        return true;
+
+      case 3:
+        // Pricing validation - at least starting price
+        if (!formData.startingPrice.trim()) {
+          toast.error('Starting price is required');
+          return false;
+        }
+        return true;
+
+      case 4:
+        // Files validation
+        if (!coverImage) {
+          toast.error('Cover image is compulsory!');
+          return false;
+        }
+        return true;
+
+      default:
+        return true;
+    }
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) {
+      setStep(step + 1);
+    }
+  };
+
   const handleSubmit = async () => {
-    // Validation
-    if (!formData.projectName) {
-      toast.error('Project name is required!');
-      return;
-    }
-    if (!coverImage) {
-      toast.error('Cover image is compulsory!');
-      return;
-    }
-    if (!formData.city) {
-      toast.error('City is required!');
-      return;
-    }
-    if (!formData.startingPrice) {
-      toast.error('Starting price is required!');
+    // Final validation before submit
+    if (!validateStep(4)) {
       return;
     }
 
@@ -201,23 +249,47 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
     try {
       const submitData = new FormData();
       
-      // Append all form fields
-      Object.keys(formData).forEach(key => {
-        if (formData[key] !== null && formData[key] !== '') {
-          submitData.append(key, formData[key]);
-        }
-      });
+      // Append all text fields
+      submitData.append('projectName', formData.projectName);
+      submitData.append('projectType', formData.type || 'RESIDENTIAL');
+      submitData.append('category', formData.category);
+      submitData.append('propertyType', formData.propertyType);
+      submitData.append('city', formData.city);
+      submitData.append('locationArea', formData.area);
+      submitData.append('locationAddress', formData.address || '');
+      submitData.append('projectStatus', formData.projectStatus);
+      
+      if (formData.googleMapLink) submitData.append('googleMapLink', formData.googleMapLink);
+      if (formData.latitude) submitData.append('latitude', formData.latitude);
+      if (formData.longitude) submitData.append('longitude', formData.longitude);
+      
+      submitData.append('reraApproved', formData.reraApproved === 'YES');
+      if (formData.reraNumber) submitData.append('reraNumber', formData.reraNumber);
+      
+      if (formData.startingPrice) submitData.append('startingPrice', formData.startingPrice);
+      if (formData.pricePerSqFt) submitData.append('pricePerSqFt', formData.pricePerSqFt);
+      if (formData.totalPriceRange) submitData.append('totalPriceRange', formData.totalPriceRange);
+      if (formData.paymentPlan) submitData.append('paymentPlan', formData.paymentPlan);
+      submitData.append('bankLoanAvailable', formData.bankLoanAvailable === 'YES');
+      
+      // Specifications
+      if (formData.bhkOptions) submitData.append('bhkOptions', JSON.stringify(formData.bhkOptions.split(',').map(s => s.trim())));
+      if (formData.carpetAreaRange) submitData.append('carpetAreaRange', formData.carpetAreaRange);
+      if (formData.floorRange) submitData.append('floorRange', formData.floorRange);
+      if (formData.facingOptions) submitData.append('facingOptions', JSON.stringify(formData.facingOptions.split(',').map(s => s.trim())));
+      submitData.append('gatedCommunity', formData.gatedCommunity === 'YES');
+      if (formData.amenities) submitData.append('amenities', JSON.stringify(formData.amenities.split(',').map(s => s.trim())));
 
-      // Append cover image
+      // Append cover image (required)
       submitData.append('coverImage', coverImage);
 
-      // Append multiple images
-      multipleImages.forEach((img, index) => {
-        submitData.append('images', img.file);
+      // Append gallery images
+      multipleImages.forEach((img) => {
+        submitData.append('galleryImages', img.file);
       });
 
       // Append videos
-      videos.forEach((video, index) => {
+      videos.forEach((video) => {
         submitData.append('videos', video.file);
       });
 
@@ -235,9 +307,8 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      toast.success('Project added successfully!');
+      toast.success('Project uploaded successfully!');
       onSuccess();
-      onClose();
     } catch (err) {
       console.error('Failed to add project:', err);
       toast.error(err.response?.data?.error || 'Failed to add project');
@@ -822,7 +893,7 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
             <div className="flex gap-2">
               {step < 4 ? (
                 <button
-                  onClick={() => setStep(step + 1)}
+                  onClick={handleNext}
                   className="btn-primary"
                 >
                   Next Step

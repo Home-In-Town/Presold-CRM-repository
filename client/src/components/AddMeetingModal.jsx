@@ -238,22 +238,62 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
   };
 
   // Submit form
+  const validateStep = (currentStep) => {
+    switch(currentStep) {
+      case 1:
+        // Step 1: Basic Info & Photos validation
+        if (!selfieFile) {
+          toast.error('Selfie photo is required');
+          return false;
+        }
+        return true;
+
+      case 2:
+        // Step 2: Office & Lead Details validation
+        if (!formData.officeName.trim()) {
+          toast.error('Office name is required');
+          return false;
+        }
+        if (!formData.officeAddress.trim()) {
+          toast.error('Office address is required');
+          return false;
+        }
+        if (!formData.role) {
+          toast.error('Role is required (Owner/PO/Broker)');
+          return false;
+        }
+        if (!formData.leadId) {
+          toast.error('Please select a lead');
+          return false;
+        }
+        if (!formData.personContact.trim()) {
+          toast.error('Contact number is required');
+          return false;
+        }
+        return true;
+
+      case 3:
+        // Step 3: Audio & Notes validation
+        if (!audioBlob) {
+          toast.error('Audio recording is mandatory!');
+          return false;
+        }
+        return true;
+
+      default:
+        return true;
+    }
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) {
+      setStep(step + 1);
+    }
+  };
+
   const handleSubmit = async () => {
-    // Validation
-    if (!audioBlob) {
-      toast.error('Audio recording is mandatory!');
-      return;
-    }
-    if (!selfieFile) {
-      toast.error('Selfie photo is required!');
-      return;
-    }
-    if (!formData.leadId) {
-      toast.error('Please select a lead!');
-      return;
-    }
-    if (!formData.officeName) {
-      toast.error('Office name is required!');
+    // Final validation before submit
+    if (!validateStep(3)) {
       return;
     }
 
@@ -261,12 +301,21 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
     try {
       const submitData = new FormData();
       
-      // Append all form fields
-      Object.keys(formData).forEach(key => {
-        if (formData[key] !== null && formData[key] !== '') {
-          submitData.append(key, formData[key]);
-        }
-      });
+      // Append text fields
+      submitData.append('meetingDateTime', formData.meetingDateTime);
+      submitData.append('officeName', formData.officeName);
+      submitData.append('officeAddress', formData.officeAddress);
+      submitData.append('role', formData.role);
+      submitData.append('personName', formData.leadName);
+      submitData.append('personContact', formData.personContact);
+      submitData.append('leadId', formData.leadId);
+      
+      if (formData.officeLatitude) submitData.append('latitude', formData.officeLatitude);
+      if (formData.officeLongitude) submitData.append('longitude', formData.officeLongitude);
+      if (formData.officeAddress) submitData.append('locationAddress', formData.officeAddress);
+      if (formData.notes) submitData.append('placeNote', formData.notes);
+      if (formData.conversation) submitData.append('conversation', formData.conversation);
+      submitData.append('audioDuration', recordingTime);
 
       // Append files
       submitData.append('selfie', selfieFile);
@@ -669,7 +718,7 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
             <div className="flex gap-2">
               {step < 3 ? (
                 <button
-                  onClick={() => setStep(step + 1)}
+                  onClick={handleNext}
                   className="btn-primary"
                 >
                   Next Step
