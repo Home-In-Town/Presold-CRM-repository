@@ -2,7 +2,7 @@ import express from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { trackingDb } from '../config/database.js';
 import multer from 'multer';
-import { uploadToGridFS, deleteFromGridFS } from '../config/gridfs.js';
+import { uploadToTrackingGridFS, deleteFromTrackingGridFS } from '../config/gridfs.js';
 
 const router = express.Router();
 
@@ -159,7 +159,7 @@ router.post('/', authenticate, upload.fields([
     // Upload cover image
     if (req.files.coverImage && req.files.coverImage[0]) {
       const file = req.files.coverImage[0];
-      const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+      const result = await uploadToTrackingGridFS(file.buffer, file.originalname, file.mimetype);
       coverImageFileId = result.fileId;
       coverImageUrl = result.url;
     }
@@ -167,7 +167,7 @@ router.post('/', authenticate, upload.fields([
     // Upload gallery images
     if (req.files.galleryImages) {
       for (const file of req.files.galleryImages) {
-        const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+        const result = await uploadToTrackingGridFS(file.buffer, file.originalname, file.mimetype);
         galleryImageFileIds.push(result.fileId);
         galleryImageUrls.push(result.url);
       }
@@ -176,7 +176,7 @@ router.post('/', authenticate, upload.fields([
     // Upload videos
     if (req.files.videos) {
       for (const file of req.files.videos) {
-        const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+        const result = await uploadToTrackingGridFS(file.buffer, file.originalname, file.mimetype);
         videoFileIds.push(result.fileId);
         videoUrls.push(result.url);
       }
@@ -185,7 +185,7 @@ router.post('/', authenticate, upload.fields([
     // Upload layout image
     if (req.files.layoutImage && req.files.layoutImage[0]) {
       const file = req.files.layoutImage[0];
-      const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+      const result = await uploadToTrackingGridFS(file.buffer, file.originalname, file.mimetype);
       layoutImageFileId = result.fileId;
       layoutImageUrl = result.url;
     }
@@ -193,7 +193,7 @@ router.post('/', authenticate, upload.fields([
     // Upload brochure
     if (req.files.brochure && req.files.brochure[0]) {
       const file = req.files.brochure[0];
-      const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+      const result = await uploadToTrackingGridFS(file.buffer, file.originalname, file.mimetype);
       brochureFileId = result.fileId;
       brochureUrl = result.url;
     }

@@ -7,7 +7,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 
 import prisma from './config/database.js';
-import { streamFromGridFS } from './config/gridfs.js';
+import { streamFromGridFS, streamFromTrackingGridFS } from './config/gridfs.js';
 import authRoutes from './routes/auth.js';
 import leadRoutes from './routes/leads.js';
 import pipelineRoutes from './routes/pipeline.js';
@@ -85,6 +85,15 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.get('/api/files/:fileId', async (req, res) => {
   try {
     await streamFromGridFS(req.params.fileId, res);
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to serve file' });
+  }
+});
+
+// Serve tracking GridFS files — /api/tracking-files/:fileId
+app.get('/api/tracking-files/:fileId', async (req, res) => {
+  try {
+    await streamFromTrackingGridFS(req.params.fileId, res);
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: 'Failed to serve file' });
   }
