@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, MapPin, User, Clock, Phone, Building2, Plus, Filter, Search, ChevronDown, ChevronUp, Volume2, FileText, Image as ImageIcon } from 'lucide-react';
+import { Calendar, MapPin, User, Clock, Phone, Building2, Plus, Filter, Search, ChevronDown, ChevronUp, Volume2, FileText, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -40,6 +40,21 @@ export default function Meetings() {
   const handleMeetingSuccess = () => {
     setShowAddModal(false);
     loadMeetings(); // Reload meetings after successful creation
+  };
+
+  const handleDelete = async (meetingId) => {
+    if (!window.confirm('Are you sure you want to delete this meeting? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/meetings/${meetingId}`);
+      toast.success('Meeting deleted successfully');
+      loadMeetings(); // Reload the list
+    } catch (err) {
+      console.error('Failed to delete meeting:', err);
+      toast.error(err.response?.data?.error || 'Failed to delete meeting');
+    }
   };
 
   const formatDateTime = (dateString) => {
@@ -240,6 +255,20 @@ export default function Meetings() {
                             <p className="text-sm text-gray-400">{meeting.role}</p>
                           )}
                         </div>
+                        
+                        {/* Delete Button - Show for own meetings or if admin */}
+                        {(meeting.userId === user?.id || user?.role === 'ADMIN') && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(meeting.id);
+                            }}
+                            className="p-2 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-lg transition-colors"
+                            title="Delete meeting"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
