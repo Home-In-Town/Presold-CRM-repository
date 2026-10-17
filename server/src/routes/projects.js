@@ -1,8 +1,19 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { trackingDb } from '../config/database.js';
+import multer from 'multer';
+import { uploadToGridFS, deleteFromGridFS } from '../config/gridfs.js';
 
 const router = express.Router();
+
+// Multer configuration for memory storage
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB per file
+  }
+});
 
 // Middleware to check if user is admin
 const requireAdmin = (req, res, next) => {
@@ -89,50 +100,155 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/projects - Create new project (Admin only)
-router.post('/', authenticate, requireAdmin, async (req, res) => {
+// POST /api/projects - Create new project
+router.post('/', authenticate, upload.fields([
+  { name: 'coverImage', maxCount: 1 },
+  { name: 'galleryImages', maxCount: 20 },
+  { name: 'videos', maxCount: 5 },
+  { name: 'layoutImage', maxCount: 1 },
+  { name: 'brochure', maxCount: 1 }
+]), async (req, res) => {
   try {
     const {
       projectName,
+      projectType,
       category,
+      propertyType,
       city,
-      projectStatus,
-      startingPrice,
-      currentValue,
-      soldValue,
-      imageUrls,
-      description,
-      amenities,
-      configuration,
-      address,
+      locationArea,
+      locationAddress,
       latitude,
       longitude,
+      googleMapLink,
+      reraApproved,
+      reraNumber,
+      projectStatus,
+      startingPrice,
+      pricePerSqFt,
+      totalPriceRange,
+      paymentPlan,
+      bankLoanAvailable,
+      bhkOptions,
+      carpetAreaRange,
+      floorRange,
+      facingOptions,
+      gatedCommunity,
+      amenities
     } = req.body;
 
+    // Validate required fields
+    if (!projectName || !category || !propertyType || !city || !locationArea || !projectStatus) {
+      return res.status(400).json({ 
+        error: 'Required fields: projectName, category, propertyType, city, locationArea, projectStatus' 
+      });
+    }
+
+    // Validate cover image is uploaded
+    if (!req.files?.coverImage || req.files.coverImage.length === 0) {
+      return res.status(400).json({ error: 'Cover image is required' });
+    }
+
+    let coverImageUrl = null, coverImageFileId = null;
+    let layoutImageUrl = null, layoutImageFileId = null;
+    let brochureUrl = null, brochureFileId = null;
+    const galleryImageUrls = [];
+    const galleryImageFileIds = [];
+    const videoUrls = [];
+    const videoFileIds = [];
+
+    // Upload cover image
+    if (req.files.coverImage && req.files.coverImage[0]) {
+      const file = req.files.coverImage[0];
+      const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+      coverImageFileId = result.fileId;
+      coverImageUrl = result.url;
+    }
+
+    // Upload gallery images
+    if (req.files.galleryImages) {
+      for (const file of req.files.galleryImages) {
+        const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+        galleryImageFileIds.push(result.fileId);
+        galleryImageUrls.push(result.url);
+      }
+    }
+
+    // Upload videos
+    if (req.files.videos) {
+      for (const file of req.files.videos) {
+        const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+        videoFileIds.push(result.fileId);
+        videoUrls.push(result.url);
+      }
+    }
+
+    // Upload layout image
+    if (req.files.layoutImage && req.files.layoutImage[0]) {
+      const file = req.files.layoutImage[0];
+      const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+      layoutImageFileId = result.fileId;
+      layoutImageUrl = result.url;
+    }
+
+    // Upload brochure
+    if (req.files.brochure && req.files.brochure[0]) {
+      const file = req.files.brochure[0];
+      const result = await uploadToGridFS(file.buffer, file.originalname, file.mimetype);
+      brochureFileId = result.fileId;
+      brochureUrl = result.url;
+    }
+
+    // Parse JSON fields
+    const configurationsArray = bhkOptions ? JSON.parse(bhkOptions) : [];
+    const facingArray = facingOptions ? JSON.parse(facingOptions) : [];
+    const amenitiesArray = amenities ? JSON.parse(amenities) : [];
+
+    // Create project
     const project = await trackingDb.project.create({
       data: {
         projectName,
+        projectType: projectType || 'RESIDENTIAL',
         category,
+        propertyType,
         city,
-        projectStatus,
-        startingPrice: startingPrice ? parseFloat(startingPrice) : null,
-        currentValue: currentValue ? parseFloat(currentValue) : null,
-        soldValue: soldValue ? parseFloat(soldValue) : null,
-        imageUrls: imageUrls || [],
-        description,
-        amenities,
-        configuration,
-        address,
+        locationArea,
+        locationAddress,
         latitude: latitude ? parseFloat(latitude) : null,
         longitude: longitude ? parseFloat(longitude) : null,
-        uploadedById: req.user.id,
-      },
+        googleMapLink: googleMapLink || null,
+        reraApproved: reraApproved === 'true' || reraApproved === true,
+        reraNumber: reraNumber || null,
+        projectStatus,
+        startingPrice: startingPrice || null,
+        pricePerSqFt: pricePerSqFt || null,
+        totalPriceRange: totalPriceRange || null,
+        paymentPlan: paymentPlan || null,
+        bankLoanAvailable: bankLoanAvailable === 'true' || bankLoanAvailable === true,
+        configurations: JSON.stringify(configurationsArray),
+        carpetAreaRange: carpetAreaRange || null,
+        floorRange: floorRange || null,
+        facingOptions: JSON.stringify(facingArray),
+        gatedCommunity: gatedCommunity === 'true' || gatedCommunity === true,
+        amenities: JSON.stringify(amenitiesArray),
+        coverImage: coverImageFileId,
+        coverImageUrl,
+        galleryImages: JSON.stringify(galleryImageFileIds),
+        galleryImageUrls: JSON.stringify(galleryImageUrls),
+        layoutImage: layoutImageFileId || null,
+        layoutImageUrl: layoutImageUrl || null,
+        brochure: brochureFileId || null,
+        brochureUrl: brochureUrl || null,
+        uploadedById: req.user.id
+      }
     });
 
-    res.status(201).json(project);
+    res.status(201).json({
+      success: true,
+      project
+    });
   } catch (err) {
     console.error('Failed to create project:', err);
-    res.status(500).json({ error: 'Failed to create project' });
+    res.status(500).json({ error: 'Failed to create project', details: err.message });
   }
 });
 

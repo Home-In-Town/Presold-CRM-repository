@@ -8,6 +8,7 @@ import {
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
+import AddProjectModal from '../components/AddProjectModal';
 
 const fadeUp = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
 
@@ -43,6 +44,7 @@ export default function Projects() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCity, setFilterCity] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     loadProjects();
@@ -65,6 +67,11 @@ export default function Projects() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleProjectSuccess = () => {
+    setShowAddModal(false);
+    loadProjects(); // Reload projects after successful creation
   };
 
   const handleDelete = async (projectId) => {
@@ -124,7 +131,7 @@ export default function Projects() {
         </div>
         {user?.role !== 'ADMIN' && (
           <button
-            onClick={() => navigate('/projects/upload')}
+            onClick={() => setShowAddModal(true)}
             className="btn-primary flex items-center gap-2"
           >
             <Plus size={16} />
@@ -215,7 +222,7 @@ export default function Projects() {
           </p>
           {user?.role !== 'ADMIN' && (
             <button
-              onClick={() => navigate('/projects/upload')}
+              onClick={() => setShowAddModal(true)}
               className="btn-primary flex items-center gap-2 mx-auto"
             >
               <Plus size={16} />
@@ -363,6 +370,15 @@ export default function Projects() {
             </motion.div>
           ))}
         </div>
+      )}
+
+      {/* Add Project Modal */}
+      {showAddModal && (
+        <AddProjectModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={handleProjectSuccess}
+        />
       )}
     </div>
   );

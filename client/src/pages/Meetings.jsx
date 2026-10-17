@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import AddMeetingModal from '../components/AddMeetingModal';
 
 export default function Meetings() {
   const { user } = useAuth();
@@ -11,6 +12,7 @@ export default function Meetings() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, upcoming, past
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     loadMeetings();
@@ -32,6 +34,11 @@ export default function Meetings() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleMeetingSuccess = () => {
+    setShowAddModal(false);
+    loadMeetings(); // Reload meetings after successful creation
   };
 
   const formatDateTime = (dateString) => {
@@ -100,13 +107,16 @@ export default function Meetings() {
             {user?.role === 'ADMIN' ? 'All team meetings' : 'Your scheduled meetings'}
           </p>
         </div>
-        <button
-          onClick={() => toast.success('Add Meeting feature coming soon!')}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} />
-          <span>Add Meeting</span>
-        </button>
+        {/* Only show Add Meeting button if user is not ADMIN */}
+        {user?.role !== 'ADMIN' && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={18} />
+            <span>Add Meeting</span>
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -271,6 +281,15 @@ export default function Meetings() {
           })
         )}
       </div>
+
+      {/* Add Meeting Modal */}
+      {showAddModal && (
+        <AddMeetingModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={handleMeetingSuccess}
+        />
+      )}
     </div>
   );
 }
