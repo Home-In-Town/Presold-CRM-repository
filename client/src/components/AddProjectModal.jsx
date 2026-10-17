@@ -639,21 +639,21 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
                     Cover Image * (Compulsory)
                   </label>
                   {coverImagePreview ? (
-                    <div className="relative w-full h-64 bg-dark-900 rounded-lg overflow-hidden">
+                    <div className="relative w-full h-40 bg-dark-900 rounded-lg overflow-hidden">
                       <img src={coverImagePreview} alt="Cover" className="w-full h-full object-cover" />
                       <button
                         onClick={() => {
                           setCoverImage(null);
                           setCoverImagePreview(null);
                         }}
-                        className="absolute top-2 right-2 p-2 bg-red-500 rounded-lg hover:bg-red-600"
+                        className="absolute top-2 right-2 p-1.5 bg-red-500 rounded-lg hover:bg-red-600"
                       >
-                        <X size={16} />
+                        <X size={14} />
                       </button>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
-                      <Upload className="text-gray-500 mb-2" size={32} />
+                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
+                      <Upload className="text-gray-500 mb-2" size={28} />
                       <span className="text-sm text-gray-400">Click to upload cover image</span>
                       <input
                         type="file"
@@ -670,7 +670,7 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Multiple Images (Gallery)
                   </label>
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
+                  <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
                     <Image className="text-gray-500 mb-2" size={24} />
                     <span className="text-sm text-gray-400">Click to upload multiple images</span>
                     <input
@@ -703,7 +703,7 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Videos
                   </label>
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
+                  <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
                     <Video className="text-gray-500 mb-2" size={24} />
                     <span className="text-sm text-gray-400">Click to upload videos</span>
                     <input
@@ -743,21 +743,21 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
                     Layout/Floor Plan Image
                   </label>
                   {layoutImagePreview ? (
-                    <div className="relative w-full h-48 bg-dark-900 rounded-lg overflow-hidden">
+                    <div className="relative w-full h-32 bg-dark-900 rounded-lg overflow-hidden">
                       <img src={layoutImagePreview} alt="Layout" className="w-full h-full object-contain" />
                       <button
                         onClick={() => {
                           setLayoutImage(null);
                           setLayoutImagePreview(null);
                         }}
-                        className="absolute top-2 right-2 p-2 bg-red-500 rounded-lg hover:bg-red-600"
+                        className="absolute top-2 right-2 p-1.5 bg-red-500 rounded-lg hover:bg-red-600"
                       >
-                        <X size={16} />
+                        <X size={14} />
                       </button>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
-                      <FileText className="text-gray-500 mb-2" size={28} />
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
+                      <FileText className="text-gray-500 mb-2" size={24} />
                       <span className="text-sm text-gray-400">Click to upload layout image</span>
                       <input
                         type="file"
@@ -791,7 +791,7 @@ export default function AddProjectModal({ isOpen, onClose, onSuccess }) {
                       </button>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
+                    <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-white/20 rounded-lg hover:border-brand-500 transition-colors cursor-pointer bg-dark-900">
                       <File className="text-gray-500 mb-2" size={24} />
                       <span className="text-sm text-gray-400">Click to upload brochure</span>
                       <input

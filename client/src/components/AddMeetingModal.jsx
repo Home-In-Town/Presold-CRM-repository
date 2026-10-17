@@ -376,7 +376,7 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
                     Selfie Photo * (Required)
                   </label>
                   {selfiePreview ? (
-                    <div className="relative w-full h-48 bg-dark-900 rounded-lg overflow-hidden">
+                    <div className="relative w-full h-36 bg-dark-900 rounded-lg overflow-hidden">
                       <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover" />
                       <button
                         onClick={() => {
@@ -417,7 +417,7 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
                     Visiting Card Photo
                   </label>
                   {visitingCardPreview ? (
-                    <div className="relative w-full h-48 bg-dark-900 rounded-lg overflow-hidden">
+                    <div className="relative w-full h-36 bg-dark-900 rounded-lg overflow-hidden">
                       <img src={visitingCardPreview} alt="Visiting Card" className="w-full h-full object-cover" />
                       <button
                         onClick={() => {
