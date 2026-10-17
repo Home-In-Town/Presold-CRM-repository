@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, MapPin, User, Clock, Phone, Building2, Plus, Filter, Search } from 'lucide-react';
+import { Calendar, MapPin, User, Clock, Phone, Building2, Plus, Filter, Search, ChevronDown, ChevronUp, Volume2, FileText, Image as ImageIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -13,6 +13,7 @@ export default function Meetings() {
   const [filter, setFilter] = useState('all'); // all, upcoming, past
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [expandedMeetingId, setExpandedMeetingId] = useState(null);
 
   useEffect(() => {
     loadMeetings();
@@ -210,72 +211,189 @@ export default function Meetings() {
         ) : (
           filteredMeetings.map((meeting, index) => {
             const status = getMeetingStatus(meeting.meetingDateTime);
+            const isExpanded = expandedMeetingId === meeting.id;
+            
             return (
               <motion.div
                 key={meeting.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-dark-800 rounded-xl p-5 border border-white/5 hover:border-white/10 transition-colors"
+                className="bg-dark-800 rounded-xl border border-white/5 hover:border-white/10 transition-colors overflow-hidden"
               >
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  {/* Meeting Info */}
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-white">
-                            {meeting.personName || 'Not specified'}
-                          </h3>
-                          <span className={`text-xs font-medium ${status.color}`}>
-                            {status.label}
-                          </span>
+                {/* Main Info - Always Visible */}
+                <div className="p-5">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    {/* Meeting Info */}
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-white">
+                              {meeting.personName || 'Not specified'}
+                            </h3>
+                            <span className={`text-xs font-medium ${status.color}`}>
+                              {status.label}
+                            </span>
+                          </div>
+                          {meeting.role && (
+                            <p className="text-sm text-gray-400">{meeting.role}</p>
+                          )}
                         </div>
-                        {meeting.role && (
-                          <p className="text-sm text-gray-400">{meeting.role}</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        {meeting.officeName && (
+                          <div className="flex items-center gap-2 text-gray-300">
+                            <Building2 size={16} className="text-gray-500 flex-shrink-0" />
+                            <span className="truncate">{meeting.officeName}</span>
+                          </div>
+                        )}
+                        {meeting.personContact && (
+                          <div className="flex items-center gap-2 text-gray-300">
+                            <Phone size={16} className="text-gray-500 flex-shrink-0" />
+                            <span>{meeting.personContact}</span>
+                          </div>
+                        )}
+                        {meeting.meetingDateTime && (
+                          <div className="flex items-center gap-2 text-gray-300">
+                            <Clock size={16} className="text-gray-500 flex-shrink-0" />
+                            <span>{formatDateTime(meeting.meetingDateTime)}</span>
+                          </div>
+                        )}
+                        {meeting.officeAddress && (
+                          <div className="flex items-center gap-2 text-gray-300">
+                            <MapPin size={16} className="text-gray-500 flex-shrink-0" />
+                            <span className="truncate">{meeting.officeAddress}</span>
+                          </div>
                         )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                      {meeting.officeName && (
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <Building2 size={16} className="text-gray-500 flex-shrink-0" />
-                          <span className="truncate">{meeting.officeName}</span>
-                        </div>
-                      )}
-                      {meeting.personContact && (
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <Phone size={16} className="text-gray-500 flex-shrink-0" />
-                          <span>{meeting.personContact}</span>
-                        </div>
-                      )}
-                      {meeting.meetingDateTime && (
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <Clock size={16} className="text-gray-500 flex-shrink-0" />
-                          <span>{formatDateTime(meeting.meetingDateTime)}</span>
-                        </div>
-                      )}
-                      {meeting.officeAddress && (
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <MapPin size={16} className="text-gray-500 flex-shrink-0" />
-                          <span className="truncate">{meeting.officeAddress}</span>
-                        </div>
-                      )}
-                    </div>
+                    {/* Selfie Preview */}
+                    {meeting.selfieUrl && (
+                      <div className="flex-shrink-0">
+                        <img
+                          src={meeting.selfieUrl}
+                          alt="Meeting selfie"
+                          className="w-16 h-16 rounded-lg object-cover border border-white/10"
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  {/* Selfie Preview */}
-                  {meeting.selfieUrl && (
-                    <div className="flex-shrink-0">
-                      <img
-                        src={meeting.selfieUrl}
-                        alt="Meeting selfie"
-                        className="w-16 h-16 rounded-lg object-cover border border-white/10"
-                      />
-                    </div>
-                  )}
+                  {/* View Details Button */}
+                  <button
+                    onClick={() => setExpandedMeetingId(isExpanded ? null : meeting.id)}
+                    className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-4 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-sm text-gray-300"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp size={16} />
+                        Hide Details
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown size={16} />
+                        View Details
+                      </>
+                    )}
+                  </button>
                 </div>
+
+                {/* Expanded Details */}
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-t border-white/5 bg-dark-900/50"
+                  >
+                    <div className="p-5 space-y-4">
+                      {/* Audio Recording */}
+                      {meeting.audioUrl && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Volume2 size={16} className="text-brand-400" />
+                            <h4 className="text-sm font-medium text-white">Audio Recording</h4>
+                            {meeting.audioDuration && (
+                              <span className="text-xs text-gray-500">
+                                ({Math.floor(meeting.audioDuration / 60)}:{(meeting.audioDuration % 60).toString().padStart(2, '0')} min)
+                              </span>
+                            )}
+                          </div>
+                          <audio controls className="w-full" src={meeting.audioUrl}>
+                            Your browser does not support audio playback.
+                          </audio>
+                        </div>
+                      )}
+
+                      {/* Visiting Card */}
+                      {meeting.visitingCardUrl && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <ImageIcon size={16} className="text-purple-400" />
+                            <h4 className="text-sm font-medium text-white">Visiting Card</h4>
+                          </div>
+                          <img
+                            src={meeting.visitingCardUrl}
+                            alt="Visiting card"
+                            className="w-full max-w-md rounded-lg border border-white/10"
+                          />
+                        </div>
+                      )}
+
+                      {/* Notes */}
+                      {meeting.placeNote && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <FileText size={16} className="text-green-400" />
+                            <h4 className="text-sm font-medium text-white">Notes</h4>
+                          </div>
+                          <p className="text-sm text-gray-300 bg-dark-800 p-3 rounded-lg">
+                            {meeting.placeNote}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Conversation */}
+                      {meeting.conversation && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <FileText size={16} className="text-blue-400" />
+                            <h4 className="text-sm font-medium text-white">Conversation</h4>
+                          </div>
+                          <p className="text-sm text-gray-300 bg-dark-800 p-3 rounded-lg whitespace-pre-wrap">
+                            {meeting.conversation}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Location */}
+                      {(meeting.latitude || meeting.longitude) && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <MapPin size={16} className="text-red-400" />
+                            <h4 className="text-sm font-medium text-white">Location Coordinates</h4>
+                          </div>
+                          <p className="text-sm text-gray-400">
+                            {meeting.latitude}, {meeting.longitude}
+                          </p>
+                          {meeting.latitude && meeting.longitude && (
+                            <a
+                              href={`https://www.google.com/maps?q=${meeting.latitude},${meeting.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-brand-400 hover:text-brand-300 inline-block mt-1"
+                            >
+                              View on Google Maps →
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
               </motion.div>
             );
           })
