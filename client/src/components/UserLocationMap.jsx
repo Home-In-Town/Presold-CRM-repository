@@ -13,6 +13,9 @@ export default function UserLocationMap() {
   const mapRef = useRef(null);
   const googleMapRef = useRef(null);
   const currentMarkerRef = useRef(null);
+  const startMarkerRef = useRef(null);
+  const endMarkerRef = useRef(null);
+  const waypointMarkersRef = useRef([]);
   const routePolylineRef = useRef(null);
   const watchIdRef = useRef(null);
 
@@ -198,29 +201,59 @@ export default function UserLocationMap() {
           stylers: [{ color: '#17263c' }]
         }
       ],
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
-      zoomControl: true
+      mapTypeControl: true,
+      mapTypeControlOptions: {
+        position: window.google.maps.ControlPosition.TOP_RIGHT
+      },
+      streetViewControl: true,
+      streetViewControlOptions: {
+        position: window.google.maps.ControlPosition.RIGHT_BOTTOM
+      },
+      fullscreenControl: true,
+      zoomControl: true,
+      zoomControlOptions: {
+        position: window.google.maps.ControlPosition.RIGHT_CENTER
+      }
     };
 
     googleMapRef.current = new window.google.maps.Map(mapRef.current, mapOptions);
 
-    // Add current location marker
+    // Add current location marker with custom icon
     currentMarkerRef.current = new window.google.maps.Marker({
       position: currentLocation,
       map: googleMapRef.current,
-      title: 'Your Location',
+      title: 'Your Current Location',
       icon: {
         path: window.google.maps.SymbolPath.CIRCLE,
-        scale: 10,
+        scale: 12,
         fillColor: '#8B5CF6',
         fillOpacity: 1,
         strokeColor: '#ffffff',
-        strokeWeight: 2
+        strokeWeight: 3
       },
-      animation: window.google.maps.Animation.DROP
+      animation: window.google.maps.Animation.BOUNCE,
+      zIndex: 1000
     });
+
+    // Add info window to current marker
+    const infoWindow = new window.google.maps.InfoWindow({
+      content: `
+        <div style="padding: 8px; color: #000;">
+          <h4 style="margin: 0 0 4px 0; font-weight: bold;">📍 You Are Here</h4>
+          <p style="margin: 4px 0; font-size: 12px;">Lat: ${currentLocation.lat.toFixed(6)}</p>
+          <p style="margin: 4px 0; font-size: 12px;">Lng: ${currentLocation.lng.toFixed(6)}</p>
+        </div>
+      `
+    });
+
+    currentMarkerRef.current.addListener('click', () => {
+      infoWindow.open(googleMapRef.current, currentMarkerRef.current);
+    });
+
+    // If checked in and has route history, draw it
+    if (isCheckedIn && routeHistory.length > 0) {
+      drawRouteOnMap();
+    }
   };
 
   const updateMapLocation = () => {
@@ -231,32 +264,147 @@ export default function UserLocationMap() {
       currentMarkerRef.current.setPosition(currentLocation);
     }
 
-    // Center map on current location
+    // Center map on current location smoothly
     googleMapRef.current.panTo(currentLocation);
 
     // Draw route if checked in
     if (isCheckedIn && routeHistory.length > 0) {
-      const pathCoordinates = routeHistory.map(loc => ({
-        lat: loc.latitude,
-        lng: loc.longitude
-      }));
+      drawRouteOnMap();
+    }
+  };
 
-      // Add current location to path
+  const drawRouteOnMap = () => {
+    if (!googleMapRef.current) return;
+
+    // Clear existing route visualization
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+    }
+    if (startMarkerRef.current) {
+      startMarkerRef.current.setMap(null);
+    }
+    if (endMarkerRef.current) {
+      endMarkerRef.current.setMap(null);
+    }
+    waypointMarkersRef.current.forEach(marker => marker.setMap(null));
+    waypointMarkersRef.current = [];
+
+    // Build path: check-in point → all location history → current location
+    const pathCoordinates = routeHistory.map(loc => ({
+      lat: loc.latitude,
+      lng: loc.longitude
+    }));
+
+    // Add current location to path if checked in
+    if (currentLocation && isCheckedIn) {
       pathCoordinates.push(currentLocation);
+    }
 
-      if (routePolylineRef.current) {
-        routePolylineRef.current.setMap(null);
-      }
+    if (pathCoordinates.length < 2) return;
 
-      routePolylineRef.current = new window.google.maps.Polyline({
-        path: pathCoordinates,
-        geodesic: true,
-        strokeColor: '#8B5CF6',
-        strokeOpacity: 1.0,
-        strokeWeight: 3,
-        map: googleMapRef.current
+    // Draw the route polyline with direction arrows
+    routePolylineRef.current = new window.google.maps.Polyline({
+      path: pathCoordinates,
+      geodesic: true,
+      strokeColor: '#8B5CF6',
+      strokeOpacity: 1.0,
+      strokeWeight: 4,
+      map: googleMapRef.current,
+      icons: [{
+        icon: {
+          path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+          scale: 3,
+          fillColor: '#8B5CF6',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 1
+        },
+        offset: '0',
+        repeat: '100px'
+      }]
+    });
+
+    // Add START marker (check-in point)
+    const startPoint = pathCoordinates[0];
+    startMarkerRef.current = new window.google.maps.Marker({
+      position: startPoint,
+      map: googleMapRef.current,
+      title: 'Check-in Location (START)',
+      label: {
+        text: '🟢',
+        fontSize: '24px'
+      },
+      zIndex: 999
+    });
+
+    const startInfo = new window.google.maps.InfoWindow({
+      content: `
+        <div style="padding: 8px; color: #000;">
+          <h4 style="margin: 0 0 4px 0; font-weight: bold;">🟢 Starting Point</h4>
+          <p style="margin: 4px 0; font-size: 11px;">Check-in location</p>
+          <p style="margin: 4px 0; font-size: 11px;">Lat: ${startPoint.lat.toFixed(6)}</p>
+          <p style="margin: 4px 0; font-size: 11px;">Lng: ${startPoint.lng.toFixed(6)}</p>
+        </div>
+      `
+    });
+
+    startMarkerRef.current.addListener('click', () => {
+      startInfo.open(googleMapRef.current, startMarkerRef.current);
+    });
+
+    // Add END marker if checked out (not currently active)
+    if (!isCheckedIn && pathCoordinates.length > 1) {
+      const endPoint = pathCoordinates[pathCoordinates.length - 1];
+      endMarkerRef.current = new window.google.maps.Marker({
+        position: endPoint,
+        map: googleMapRef.current,
+        title: 'Check-out Location (END)',
+        label: {
+          text: '🔴',
+          fontSize: '24px'
+        },
+        zIndex: 999
+      });
+
+      const endInfo = new window.google.maps.InfoWindow({
+        content: `
+          <div style="padding: 8px; color: #000;">
+            <h4 style="margin: 0 0 4px 0; font-weight: bold;">🔴 Ending Point</h4>
+            <p style="margin: 4px 0; font-size: 11px;">Check-out location</p>
+            <p style="margin: 4px 0; font-size: 11px;">Lat: ${endPoint.lat.toFixed(6)}</p>
+            <p style="margin: 4px 0; font-size: 11px;">Lng: ${endPoint.lng.toFixed(6)}</p>
+          </div>
+        `
+      });
+
+      endMarkerRef.current.addListener('click', () => {
+        endInfo.open(googleMapRef.current, endMarkerRef.current);
       });
     }
+
+    // Add intermediate waypoint markers (skip first and last)
+    pathCoordinates.slice(1, -1).forEach((point, index) => {
+      const waypoint = new window.google.maps.Marker({
+        position: point,
+        map: googleMapRef.current,
+        title: `Waypoint ${index + 1}`,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 5,
+          fillColor: '#8B5CF6',
+          fillOpacity: 0.8,
+          strokeColor: '#ffffff',
+          strokeWeight: 1
+        },
+        zIndex: 500
+      });
+      waypointMarkersRef.current.push(waypoint);
+    });
+
+    // Fit map bounds to show entire route
+    const bounds = new window.google.maps.LatLngBounds();
+    pathCoordinates.forEach(point => bounds.extend(point));
+    googleMapRef.current.fitBounds(bounds);
   };
 
   if (loading) {
@@ -315,12 +463,48 @@ export default function UserLocationMap() {
             
             {/* Route Info Overlay */}
             {isCheckedIn && routeHistory.length > 0 && (
-              <div className="absolute bottom-4 left-4 bg-dark-900/90 backdrop-blur-sm rounded-lg px-4 py-2 border border-white/10">
-                <div className="flex items-center gap-2">
-                  <MapPin size={14} className="text-brand-400" />
-                  <span className="text-xs text-gray-300">
-                    {routeHistory.length} location points tracked
-                  </span>
+              <div className="absolute bottom-4 left-4 bg-dark-900/95 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/10 shadow-xl">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span className="text-xs text-gray-300">Starting Point</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                    <span className="text-xs text-gray-300">Current Location</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin size={14} className="text-brand-400" />
+                    <span className="text-xs text-gray-300">
+                      {routeHistory.length} waypoints tracked
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Legend for completed routes (when checked out) */}
+            {!isCheckedIn && routeHistory.length > 0 && (
+              <div className="absolute bottom-4 left-4 bg-dark-900/95 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/10 shadow-xl">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🟢</span>
+                    <span className="text-xs text-gray-300">Check-in Point</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🔴</span>
+                    <span className="text-xs text-gray-300">Check-out Point</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                    <span className="text-xs text-gray-300">Travel Route</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin size={14} className="text-brand-400" />
+                    <span className="text-xs text-gray-300">
+                      {routeHistory.length} location points
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
