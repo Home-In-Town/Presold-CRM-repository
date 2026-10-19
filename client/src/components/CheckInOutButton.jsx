@@ -91,12 +91,24 @@ export default function CheckInOutButton() {
           });
         },
         (error) => {
-          reject(error);
+          let errorMessage = 'Unable to get location';
+          switch(error.code) {
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out. Please try again.';
+              break;
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location permission denied. Please enable location access.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information unavailable. Please check your GPS.';
+              break;
+          }
+          reject(new Error(errorMessage));
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+          timeout: 30000, // Increased to 30 seconds
+          maximumAge: 10000 // Accept cached position up to 10 seconds old
         }
       );
     });
@@ -124,8 +136,24 @@ export default function CheckInOutButton() {
     const loadingToast = toast.loading('Getting location...');
 
     try {
-      // Get current location
-      const location = await getCurrentLocation();
+      // Get current location with fallback
+      let location;
+      try {
+        location = await getCurrentLocation();
+      } catch (err) {
+        // If high accuracy fails, try with lower accuracy
+        toast.dismiss(loadingToast);
+        const retryToast = toast.loading('Retrying with lower accuracy...');
+        
+        try {
+          location = await getCurrentLocationLowAccuracy();
+          toast.dismiss(retryToast);
+        } catch (retryErr) {
+          toast.dismiss(retryToast);
+          throw retryErr;
+        }
+      }
+      
       setCurrentLocation(location);
 
       // Send check-in request
@@ -146,10 +174,32 @@ export default function CheckInOutButton() {
     } catch (err) {
       toast.dismiss(loadingToast);
       console.error('Check-in failed:', err);
-      toast.error(err.message || 'Failed to check in. Please enable location access.');
+      toast.error(err.message || 'Failed to check in. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const getCurrentLocationLowAccuracy = () => {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          });
+        },
+        (error) => {
+          reject(new Error('Unable to get location. Please check your GPS settings.'));
+        },
+        {
+          enableHighAccuracy: false, // Lower accuracy, faster
+          timeout: 15000,
+          maximumAge: 30000 // Accept older cached position
+        }
+      );
+    });
   };
 
   const handleCheckOut = async () => {
@@ -161,8 +211,23 @@ export default function CheckInOutButton() {
     const loadingToast = toast.loading('Getting location...');
 
     try {
-      // Get current location
-      const location = await getCurrentLocation();
+      // Get current location with fallback
+      let location;
+      try {
+        location = await getCurrentLocation();
+      } catch (err) {
+        // If high accuracy fails, try with lower accuracy
+        toast.dismiss(loadingToast);
+        const retryToast = toast.loading('Retrying with lower accuracy...');
+        
+        try {
+          location = await getCurrentLocationLowAccuracy();
+          toast.dismiss(retryToast);
+        } catch (retryErr) {
+          toast.dismiss(retryToast);
+          throw retryErr;
+        }
+      }
 
       // Send check-out request
       await api.post('/attendance/check-out', {
@@ -183,7 +248,7 @@ export default function CheckInOutButton() {
     } catch (err) {
       toast.dismiss(loadingToast);
       console.error('Check-out failed:', err);
-      toast.error(err.message || 'Failed to check out');
+      toast.error(err.message || 'Failed to check out. Please try again.');
     } finally {
       setLoading(false);
     }

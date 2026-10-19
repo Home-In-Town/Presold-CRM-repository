@@ -137,11 +137,29 @@ export default function UserLocationMap() {
 
   const getCurrentPosition = () => {
     return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      });
+      navigator.geolocation.getCurrentPosition(
+        resolve, 
+        (error) => {
+          let errorMessage = 'Unable to get location';
+          switch(error.code) {
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out. Please try again.';
+              break;
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location permission denied.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location unavailable. Please check GPS.';
+              break;
+          }
+          reject(new Error(errorMessage));
+        }, 
+        {
+          enableHighAccuracy: true,
+          timeout: 30000, // Increased to 30 seconds
+          maximumAge: 10000 // Accept cached position up to 10 seconds old
+        }
+      );
     });
   };
 
