@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/tracking-client"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("TRACKING_DATABASE_URL")
+}
+
+model LocationHistory {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  latitude  Float
+  longitude Float
+  accuracy  Float?
+  address   String?
+  timestamp DateTime @default(now())
+  
+  // User reference (cross-database - no @relation)
+  userId    String   @db.ObjectId
+
+  @@index([userId, timestamp])
+}
+
+model CheckInOut {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  checkInTime     DateTime
+  checkInLat      Float
+  checkInLng      Float
+  checkInAddress  String?
+  checkOutTime    DateTime?
+  checkOutLat     Float?
+  checkOutLng     Float?
+  checkOutAddress String?
+  status          String    @default("CHECKED_IN") // CHECKED_IN, CHECKED_OUT
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // User reference (cross-database - no @relation)
+  userId          String    @db.ObjectId
+
+  @@index([userId, checkInTime])
+}
+
+model Meeting {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  selfieUrl         String?
+  selfieFileId      String?
+  meetingDateTime   DateTime?
+  latitude          Float?
+  longitude         Float?
+  locationAddress   String?
+  officeName        String?
+  officeAddress     String?
+  placeNote         String?
+  conversation      String?
+  audioUrl          String?
+  audioFileId       String?
+  audioDuration     Int?      // in seconds
+  role              String?   // OWNER, PO, BROKER
+  personName        String?
+  personContact     String?
+  visitingCardUrl   String?
+  visitingCardFileId String?
+  status            String    @default("DRAFT") // DRAFT, COMPLETED
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // User reference (cross-database - no @relation) - nullable for legacy data
+  userId            String?   @db.ObjectId
+  
+  // Lead reference (optional - links meeting to a lead)
+  leadId            String?   @db.ObjectId
+
+  @@index([userId, meetingDateTime])
+  @@index([status])
+  @@index([leadId])
+}
+
+model Project {
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  projectName         String
+  projectType         String    // Type of project
+  category            String    // RESIDENTIAL, COMMERCIAL, MIXED_USE
+  propertyType        String    // APARTMENT, ROW_HOUSE, etc.
+  
+  // Location
+  latitude            Float?
+  longitude           Float?
+  city                String
+  locationArea        String
+  locationAddress     String?   // Full address
+  googleMapLink       String?
+  
+  // RERA Details
+  reraApproved        Boolean   @default(false)
+  reraNumber          String?
+  
+  // Project Status & Pricing
+  projectStatus       String    // PRE_LAUNCH, UNDER_CONSTRUCTION, READY_TO_MOVE, COMPLETED
+  startingPrice       String?
+  pricePerSqFt        String?
+  totalPriceRange     String?
+  paymentPlan         String?
+  bankLoanAvailable   Boolean   @default(false)
+  
+  // Configuration
+  configurations      String    @default("[]")  // JSON array: ["1BHK", "2BHK", "3BHK", etc.]
+  carpetAreaRange     String?
+  floorRange          String?
+  facingOptions       String    @default("[]")  // JSON array: ["North", "South", etc.]
+  gatedCommunity      Boolean   @default(false)
+  amenities           String    @default("[]")  // JSON array of amenities
+  
+  // Media
+  coverImage          String    // Required - GridFS file ID or URL
+  coverImageUrl       String?
+  galleryImages       String    @default("[]")  // JSON array of file IDs
+  galleryImageUrls    String    @default("[]")  // JSON array of URLs
+  layoutImage         String?   // GridFS file ID
+  layoutImageUrl      String?
+  brochure            String?   // GridFS file ID
+  brochureUrl         String?
+  
+  // Metadata
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+  
+  // User reference (cross-database - no @relation)
+  uploadedById        String    @db.ObjectId
+  
+  @@index([category, projectStatus])
+  @@index([city])
+}

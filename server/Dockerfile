@@ -14,8 +14,9 @@ RUN npm ci
 COPY prisma ./prisma
 COPY src ./src
 
-# Generate Prisma client
+# Generate Prisma clients (main and tracking)
 RUN npx prisma generate
+RUN npx prisma generate --schema=./prisma/schema-tracking.prisma
 
 # Create uploads dir as fallback for local dev (production uses Cloudinary)
 RUN mkdir -p /app/uploads

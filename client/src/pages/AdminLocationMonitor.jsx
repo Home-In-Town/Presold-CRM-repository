@@ -16,20 +16,12 @@ export default function AdminLocationMonitor() {
   const polylinesRef = useRef([]);
 
   useEffect(() => {
-    loadAllLocations();
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(() => {
-      loadAllLocations();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    // Initialize map when Google Maps is loaded
+    // Initialize map FIRST (fast)
     const initMapWhenReady = () => {
       if (window.google && window.google.maps && mapRef.current && !googleMapRef.current) {
         console.log('Admin: Initializing map...');
         initializeMap();
+        setLoading(false); // Map is ready, stop showing loading spinner
       }
     };
 
@@ -52,6 +44,16 @@ export default function AdminLocationMonitor() {
   }, []);
 
   useEffect(() => {
+    // Load location data AFTER map is initialized (runs in parallel)
+    loadAllLocations();
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      loadAllLocations();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     // Update map markers when users data changes
     if (googleMapRef.current && users.length > 0) {
       updateMapMarkers();
@@ -64,12 +66,14 @@ export default function AdminLocationMonitor() {
       const res = await api.get('/attendance/admin/all-locations');
       setUsers(res.data.users || []);
       setLastUpdate(new Date());
+      setRefreshing(false);
     } catch (err) {
       console.error('Failed to load locations:', err);
-      toast.error(err.response?.data?.error || 'Failed to load locations');
+      // Don't show toast error if it's the first load and user list is empty
+      if (users.length > 0 || !loading) {
+        toast.error(err.response?.data?.error || 'Failed to load locations');
+      }
       setUsers([]);
-    } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
@@ -445,7 +449,22 @@ export default function AdminLocationMonitor() {
         <div className="lg:col-span-1 space-y-3">
           <h2 className="text-lg font-semibold text-white mb-3">Team Members</h2>
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {users.length === 0 ? (
+            {refreshing && users.length === 0 ? (
+              // Loading skeleton
+              <>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="bg-dark-800 rounded-xl p-4 border border-white/5 animate-pulse">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gray-700" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-700 rounded w-3/4" />
+                        <div className="h-3 bg-gray-700 rounded w-1/2" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : users.length === 0 ? (
               <div className="bg-dark-800 rounded-xl p-6 text-center border border-white/5">
                 <Users className="mx-auto text-gray-600 mb-2" size={32} />
                 <p className="text-sm text-gray-400">No check-ins today</p>
