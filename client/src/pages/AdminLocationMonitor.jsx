@@ -25,9 +25,29 @@ export default function AdminLocationMonitor() {
   }, []);
 
   useEffect(() => {
-    // Initialize map when component mounts and Google Maps is loaded
-    if (window.google && mapRef.current && !googleMapRef.current) {
-      initializeMap();
+    // Initialize map when Google Maps is loaded
+    const initMapWhenReady = () => {
+      if (window.google && window.google.maps && mapRef.current && !googleMapRef.current) {
+        console.log('Admin: Initializing map...');
+        initializeMap();
+      }
+    };
+
+    // Check if Google Maps is already loaded
+    if (window.google && window.google.maps) {
+      initMapWhenReady();
+    } else {
+      // Wait for Google Maps to load
+      console.log('Admin: Waiting for Google Maps API...');
+      const checkInterval = setInterval(() => {
+        if (window.google && window.google.maps) {
+          console.log('Admin: Google Maps API loaded!');
+          clearInterval(checkInterval);
+          initMapWhenReady();
+        }
+      }, 100);
+
+      return () => clearInterval(checkInterval);
     }
   }, []);
 
@@ -140,8 +160,23 @@ export default function AdminLocationMonitor() {
           elementType: 'labels.text.stroke',
           stylers: [{ color: '#17263c' }]
         }
-      ]
+      ],
+      mapTypeControl: true,
+      mapTypeControlOptions: {
+        position: window.google.maps.ControlPosition.TOP_RIGHT
+      },
+      streetViewControl: true,
+      streetViewControlOptions: {
+        position: window.google.maps.ControlPosition.RIGHT_BOTTOM
+      },
+      fullscreenControl: true,
+      zoomControl: true,
+      zoomControlOptions: {
+        position: window.google.maps.ControlPosition.RIGHT_CENTER
+      }
     });
+    
+    console.log('Admin map initialized successfully');
   };
 
   const updateMapMarkers = () => {
@@ -489,7 +524,17 @@ export default function AdminLocationMonitor() {
               </p>
             </div>
             <div className="relative">
-              <div ref={mapRef} className="h-[600px]" />
+              <div ref={mapRef} className="h-[600px] w-full" style={{ minHeight: '600px' }} />
+              
+              {/* Loading overlay for map */}
+              {!googleMapRef.current && (
+                <div className="absolute inset-0 bg-dark-900 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-r-transparent mb-4"></div>
+                    <p className="text-sm text-gray-400">Loading map...</p>
+                  </div>
+                </div>
+              )}
               
               {/* Color Legend Overlay */}
               {users.length > 0 && (
