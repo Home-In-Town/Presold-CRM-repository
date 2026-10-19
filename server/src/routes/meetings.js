@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.js';
-import { uploadToGridFS, streamFromGridFS, deleteFromGridFS } from '../config/gridfs.js';
+import { uploadToTrackingGridFS, deleteFromTrackingGridFS } from '../config/gridfs.js';
 import multer from 'multer';
 import { trackingDb } from '../config/database.js';
 
@@ -66,7 +66,7 @@ router.post('/', authenticate, upload.fields([
     // Upload selfie to GridFS
     if (req.files?.selfie && req.files.selfie[0]) {
       const selfieFile = req.files.selfie[0];
-      const result = await uploadToGridFS(selfieFile.buffer, selfieFile.originalname, selfieFile.mimetype);
+      const result = await uploadToTrackingGridFS(selfieFile.buffer, selfieFile.originalname, selfieFile.mimetype);
       selfieFileId = result.fileId;
       selfieUrl = result.url;
     }
@@ -74,7 +74,7 @@ router.post('/', authenticate, upload.fields([
     // Upload audio to GridFS
     if (req.files?.audio && req.files.audio[0]) {
       const audioFile = req.files.audio[0];
-      const result = await uploadToGridFS(audioFile.buffer, audioFile.originalname, audioFile.mimetype);
+      const result = await uploadToTrackingGridFS(audioFile.buffer, audioFile.originalname, audioFile.mimetype);
       audioFileId = result.fileId;
       audioUrl = result.url;
     }
@@ -82,7 +82,7 @@ router.post('/', authenticate, upload.fields([
     // Upload visiting card to GridFS
     if (req.files?.visitingCard && req.files.visitingCard[0]) {
       const cardFile = req.files.visitingCard[0];
-      const result = await uploadToGridFS(cardFile.buffer, cardFile.originalname, cardFile.mimetype);
+      const result = await uploadToTrackingGridFS(cardFile.buffer, cardFile.originalname, cardFile.mimetype);
       visitingCardFileId = result.fileId;
       visitingCardUrl = result.url;
     }
@@ -359,10 +359,10 @@ router.put('/:id', authenticate, upload.fields([
     if (req.files?.selfie && req.files.selfie[0]) {
       // Delete old selfie if exists
       if (existingMeeting.selfieFileId) {
-        await deleteFromGridFS(existingMeeting.selfieFileId);
+        await deleteFromTrackingGridFS(existingMeeting.selfieFileId);
       }
       const selfieFile = req.files.selfie[0];
-      const result = await uploadToGridFS(selfieFile.buffer, selfieFile.originalname, selfieFile.mimetype);
+      const result = await uploadToTrackingGridFS(selfieFile.buffer, selfieFile.originalname, selfieFile.mimetype);
       updateData.selfieUrl = result.url;
       updateData.selfieFileId = result.fileId;
     }
@@ -370,10 +370,10 @@ router.put('/:id', authenticate, upload.fields([
     if (req.files?.audio && req.files.audio[0]) {
       // Delete old audio if exists
       if (existingMeeting.audioFileId) {
-        await deleteFromGridFS(existingMeeting.audioFileId);
+        await deleteFromTrackingGridFS(existingMeeting.audioFileId);
       }
       const audioFile = req.files.audio[0];
-      const result = await uploadToGridFS(audioFile.buffer, audioFile.originalname, audioFile.mimetype);
+      const result = await uploadToTrackingGridFS(audioFile.buffer, audioFile.originalname, audioFile.mimetype);
       updateData.audioUrl = result.url;
       updateData.audioFileId = result.fileId;
     }
@@ -381,10 +381,10 @@ router.put('/:id', authenticate, upload.fields([
     if (req.files?.visitingCard && req.files.visitingCard[0]) {
       // Delete old visiting card if exists
       if (existingMeeting.visitingCardFileId) {
-        await deleteFromGridFS(existingMeeting.visitingCardFileId);
+        await deleteFromTrackingGridFS(existingMeeting.visitingCardFileId);
       }
       const cardFile = req.files.visitingCard[0];
-      const result = await uploadToGridFS(cardFile.buffer, cardFile.originalname, cardFile.mimetype);
+      const result = await uploadToTrackingGridFS(cardFile.buffer, cardFile.originalname, cardFile.mimetype);
       updateData.visitingCardUrl = result.url;
       updateData.visitingCardFileId = result.fileId;
     }
@@ -423,13 +423,13 @@ router.delete('/:id', authenticate, async (req, res) => {
 
     // Delete associated files from GridFS
     if (meeting.selfieFileId) {
-      await deleteFromGridFS(meeting.selfieFileId);
+      await deleteFromTrackingGridFS(meeting.selfieFileId);
     }
     if (meeting.audioFileId) {
-      await deleteFromGridFS(meeting.audioFileId);
+      await deleteFromTrackingGridFS(meeting.audioFileId);
     }
     if (meeting.visitingCardFileId) {
-      await deleteFromGridFS(meeting.visitingCardFileId);
+      await deleteFromTrackingGridFS(meeting.visitingCardFileId);
     }
 
     await trackingDb.meeting.delete({
