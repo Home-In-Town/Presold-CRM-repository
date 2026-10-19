@@ -32,10 +32,27 @@ export default function UserLocationMap() {
 
   useEffect(() => {
     // Initialize map when Google Maps is loaded and we have location permission
-    if (window.google && mapRef.current && !googleMapRef.current && locationPermission === 'granted') {
-      initializeMap();
+    const initMapWhenReady = () => {
+      if (window.google && window.google.maps && mapRef.current && !googleMapRef.current && locationPermission === 'granted') {
+        initializeMap();
+      }
+    };
+
+    // Check if Google Maps is already loaded
+    if (window.google && window.google.maps) {
+      initMapWhenReady();
+    } else {
+      // Wait for Google Maps to load
+      const checkInterval = setInterval(() => {
+        if (window.google && window.google.maps) {
+          clearInterval(checkInterval);
+          initMapWhenReady();
+        }
+      }, 100);
+
+      return () => clearInterval(checkInterval);
     }
-  }, [locationPermission]);
+  }, [locationPermission, currentLocation]);
 
   useEffect(() => {
     // Update map when location or route changes
@@ -181,11 +198,12 @@ export default function UserLocationMap() {
   };
 
   const initializeMap = () => {
-    if (!currentLocation) return;
+    // Use current location if available, otherwise use a default center (India)
+    const center = currentLocation || { lat: 20.5937, lng: 78.9629 };
 
     const mapOptions = {
-      center: currentLocation,
-      zoom: 15,
+      center: center,
+      zoom: currentLocation ? 15 : 5,
       styles: [
         { elementType: 'geometry', stylers: [{ color: '#1a1f2e' }] },
         { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1f2e' }] },
@@ -218,37 +236,39 @@ export default function UserLocationMap() {
 
     googleMapRef.current = new window.google.maps.Map(mapRef.current, mapOptions);
 
-    // Add current location marker with custom icon
-    currentMarkerRef.current = new window.google.maps.Marker({
-      position: currentLocation,
-      map: googleMapRef.current,
-      title: 'Your Current Location',
-      icon: {
-        path: window.google.maps.SymbolPath.CIRCLE,
-        scale: 12,
-        fillColor: '#8B5CF6',
-        fillOpacity: 1,
-        strokeColor: '#ffffff',
-        strokeWeight: 3
-      },
-      animation: window.google.maps.Animation.BOUNCE,
-      zIndex: 1000
-    });
+    // Add current location marker with custom icon (only if we have location)
+    if (currentLocation) {
+      currentMarkerRef.current = new window.google.maps.Marker({
+        position: currentLocation,
+        map: googleMapRef.current,
+        title: 'Your Current Location',
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 12,
+          fillColor: '#8B5CF6',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3
+        },
+        animation: window.google.maps.Animation.BOUNCE,
+        zIndex: 1000
+      });
 
-    // Add info window to current marker
-    const infoWindow = new window.google.maps.InfoWindow({
-      content: `
-        <div style="padding: 8px; color: #000;">
-          <h4 style="margin: 0 0 4px 0; font-weight: bold;">📍 You Are Here</h4>
-          <p style="margin: 4px 0; font-size: 12px;">Lat: ${currentLocation.lat.toFixed(6)}</p>
-          <p style="margin: 4px 0; font-size: 12px;">Lng: ${currentLocation.lng.toFixed(6)}</p>
-        </div>
-      `
-    });
+      // Add info window to current marker
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div style="padding: 8px; color: #000;">
+            <h4 style="margin: 0 0 4px 0; font-weight: bold;">📍 You Are Here</h4>
+            <p style="margin: 4px 0; font-size: 12px;">Lat: ${currentLocation.lat.toFixed(6)}</p>
+            <p style="margin: 4px 0; font-size: 12px;">Lng: ${currentLocation.lng.toFixed(6)}</p>
+          </div>
+        `
+      });
 
-    currentMarkerRef.current.addListener('click', () => {
-      infoWindow.open(googleMapRef.current, currentMarkerRef.current);
-    });
+      currentMarkerRef.current.addListener('click', () => {
+        infoWindow.open(googleMapRef.current, currentMarkerRef.current);
+      });
+    }
 
     // If checked in and has route history, draw it
     if (isCheckedIn && routeHistory.length > 0) {

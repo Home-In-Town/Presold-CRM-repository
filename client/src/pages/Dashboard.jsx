@@ -168,6 +168,13 @@ export default function Dashboard() {
         </motion.div>
       )}
 
+      {/* User Location Map - For non-admin users only (TOP OF PAGE) */}
+      {user?.role !== 'ADMIN' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <UserLocationMap />
+        </motion.div>
+      )}
+
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((card, i) => (
@@ -273,13 +280,6 @@ export default function Dashboard() {
           </div>
         </motion.div>
       </div>
-
-      {/* User Location Map - For non-admin users only */}
-      {user?.role !== 'ADMIN' && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <UserLocationMap />
-        </motion.div>
-      )}
 
       {/* Sales Activity & Follow-ups */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
