@@ -79,6 +79,15 @@ app.use(express.urlencoded({ extended: true }));
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500 });
 app.use('/api', limiter);
 
+// Request logger (debug)
+app.use((req, res, next) => {
+  if (req.path.includes('/api/projects')) {
+    console.log(`📨 ${req.method} ${req.path}`);
+    console.log('Headers:', req.headers.authorization ? 'Has auth token' : 'No auth');
+  }
+  next();
+});
+
 // Static files (local dev fallback)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -134,7 +143,11 @@ app.get('/api/health', async (req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error(err);
+  console.error('❌ Error caught by global handler:');
+  console.error('Path:', req.path);
+  console.error('Method:', req.method);
+  console.error('Error:', err.message);
+  console.error('Stack:', err.stack);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 

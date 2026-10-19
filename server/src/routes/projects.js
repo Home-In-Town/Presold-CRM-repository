@@ -108,7 +108,13 @@ router.post('/', authenticate, upload.fields([
   { name: 'layoutImage', maxCount: 1 },
   { name: 'brochure', maxCount: 1 }
 ]), async (req, res) => {
+  console.log('🔵 POST /api/projects endpoint hit');
+  console.log('User:', req.user?.id, req.user?.email);
   try {
+    console.log('📝 Creating project - received data');
+    console.log('Files:', Object.keys(req.files || {}));
+    console.log('Body keys:', Object.keys(req.body));
+    
     const {
       projectName,
       projectType,
@@ -138,6 +144,8 @@ router.post('/', authenticate, upload.fields([
 
     // Validate required fields
     if (!projectName || !category || !propertyType || !city || !locationArea || !projectStatus) {
+      console.log('❌ Validation failed - missing required fields');
+      console.log({ projectName, category, propertyType, city, locationArea, projectStatus });
       return res.status(400).json({ 
         error: 'Required fields: projectName, category, propertyType, city, locationArea, projectStatus' 
       });
@@ -158,10 +166,12 @@ router.post('/', authenticate, upload.fields([
 
     // Upload cover image
     if (req.files.coverImage && req.files.coverImage[0]) {
+      console.log('📤 Uploading cover image...');
       const file = req.files.coverImage[0];
       const result = await uploadToTrackingGridFS(file.buffer, file.originalname, file.mimetype);
       coverImageFileId = result.fileId;
       coverImageUrl = result.url;
+      console.log('✅ Cover image uploaded:', coverImageUrl);
     }
 
     // Upload gallery images
@@ -204,6 +214,7 @@ router.post('/', authenticate, upload.fields([
     const amenitiesArray = amenities ? JSON.parse(amenities) : [];
 
     // Create project
+    console.log('💾 Creating project in database...');
     const project = await trackingDb.project.create({
       data: {
         projectName,
@@ -242,12 +253,14 @@ router.post('/', authenticate, upload.fields([
       }
     });
 
+    console.log('✅ Project created successfully:', project.id);
     res.status(201).json({
       success: true,
       project
     });
   } catch (err) {
-    console.error('Failed to create project:', err);
+    console.error('❌ Failed to create project:', err);
+    console.error('Error stack:', err.stack);
     res.status(500).json({ error: 'Failed to create project', details: err.message });
   }
 });
