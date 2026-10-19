@@ -31,9 +31,10 @@ export default function UserLocationMap() {
   }, []);
 
   useEffect(() => {
-    // Initialize map when Google Maps is loaded and we have location permission
+    // Initialize map when Google Maps is loaded
     const initMapWhenReady = () => {
-      if (window.google && window.google.maps && mapRef.current && !googleMapRef.current && locationPermission === 'granted') {
+      if (window.google && window.google.maps && mapRef.current && !googleMapRef.current) {
+        console.log('Initializing map...');
         initializeMap();
       }
     };
@@ -43,8 +44,10 @@ export default function UserLocationMap() {
       initMapWhenReady();
     } else {
       // Wait for Google Maps to load
+      console.log('Waiting for Google Maps API...');
       const checkInterval = setInterval(() => {
         if (window.google && window.google.maps) {
+          console.log('Google Maps API loaded!');
           clearInterval(checkInterval);
           initMapWhenReady();
         }
@@ -52,7 +55,7 @@ export default function UserLocationMap() {
 
       return () => clearInterval(checkInterval);
     }
-  }, [locationPermission, currentLocation]);
+  }, [currentLocation]);
 
   useEffect(() => {
     // Update map when location or route changes
@@ -495,12 +498,43 @@ export default function UserLocationMap() {
 
       {/* Map or Permission Request */}
       <div className="relative">
-        {locationPermission === 'granted' ? (
+        {locationPermission === 'granted' || window.google ? (
           <>
-            <div ref={mapRef} className="h-80 w-full" />
+            <div ref={mapRef} className="h-80 w-full" style={{ minHeight: '320px' }} />
+            
+            {/* Permission overlay if not granted */}
+            {locationPermission !== 'granted' && (
+              <div className="absolute inset-0 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center z-10">
+                <div className="text-center max-w-md px-6">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="w-16 h-16 rounded-full bg-brand-500/20 flex items-center justify-center mx-auto mb-4"
+                  >
+                    <MapPin className="text-brand-400" size={32} />
+                  </motion.div>
+                  
+                  <h4 className="text-lg font-semibold text-white mb-2">
+                    Enable Location Tracking
+                  </h4>
+                  
+                  <p className="text-sm text-gray-400 mb-6">
+                    Allow location access to view your live position, track your route, and enable check-in functionality.
+                  </p>
+
+                  <button
+                    onClick={requestLocationPermission}
+                    className="btn-primary flex items-center gap-2 mx-auto"
+                  >
+                    <Navigation size={16} />
+                    <span>Allow Location Access</span>
+                  </button>
+                </div>
+              </div>
+            )}
             
             {/* Route Info Overlay */}
-            {isCheckedIn && routeHistory.length > 0 && (
+            {locationPermission === 'granted' && isCheckedIn && routeHistory.length > 0 && (
               <div className="absolute bottom-4 left-4 bg-dark-900/95 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/10 shadow-xl">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
@@ -522,7 +556,7 @@ export default function UserLocationMap() {
             )}
 
             {/* Legend for completed routes (when checked out) */}
-            {!isCheckedIn && routeHistory.length > 0 && (
+            {locationPermission === 'granted' && !isCheckedIn && routeHistory.length > 0 && (
               <div className="absolute bottom-4 left-4 bg-dark-900/95 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/10 shadow-xl">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
@@ -561,24 +595,14 @@ export default function UserLocationMap() {
               <h4 className="text-lg font-semibold text-white mb-2">
                 {locationPermission === 'denied' 
                   ? 'Location Access Required' 
-                  : 'Enable Location Tracking'}
+                  : 'Loading Map...'}
               </h4>
               
               <p className="text-sm text-gray-400 mb-6">
                 {locationPermission === 'denied'
                   ? 'Location access was denied. Please enable location permissions in your browser settings to use this feature.'
-                  : 'Allow location access to view your live position, track your route, and enable check-in functionality.'}
+                  : 'Waiting for Google Maps to load...'}
               </p>
-
-              {locationPermission !== 'denied' && (
-                <button
-                  onClick={requestLocationPermission}
-                  className="btn-primary flex items-center gap-2 mx-auto"
-                >
-                  <Navigation size={16} />
-                  <span>Allow Location Access</span>
-                </button>
-              )}
 
               {locationPermission === 'denied' && (
                 <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
