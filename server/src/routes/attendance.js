@@ -256,6 +256,53 @@ router.get('/history', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/attendance/route-history - Get location history for today's route
+router.get('/route-history', authenticate, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Find today's check-in
+    const checkIn = await trackingDb.checkInOut.findFirst({
+      where: {
+        userId: req.user.id,
+        checkInTime: {
+          gte: today,
+          lt: tomorrow
+        }
+      },
+      orderBy: {
+        checkInTime: 'desc'
+      }
+    });
+
+    if (!checkIn) {
+      return res.json({ locations: [] });
+    }
+
+    // Get location history from check-in time
+    const locations = await trackingDb.locationHistory.findMany({
+      where: {
+        userId: req.user.id,
+        timestamp: {
+          gte: checkIn.checkInTime,
+          ...(checkIn.checkOutTime && { lte: checkIn.checkOutTime })
+        }
+      },
+      orderBy: {
+        timestamp: 'asc'
+      }
+    });
+
+    res.json({ locations });
+  } catch (err) {
+    console.error('Route history error:', err);
+    res.status(500).json({ error: 'Failed to fetch route history' });
+  }
+});
+
 // GET /api/attendance/admin/monthly-report - Admin only: Get monthly attendance report for all users
 router.get('/admin/monthly-report', authenticate, async (req, res) => {
   try {

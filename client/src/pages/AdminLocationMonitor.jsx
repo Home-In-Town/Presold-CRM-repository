@@ -156,7 +156,19 @@ export default function AdminLocationMonitor() {
     if (users.length === 0) return;
 
     const bounds = new window.google.maps.LatLngBounds();
-    const colors = ['#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6', '#EF4444'];
+    // Enhanced color palette with more distinct colors
+    const colors = [
+      '#8B5CF6', // Purple
+      '#EC4899', // Pink
+      '#10B981', // Green
+      '#F59E0B', // Amber
+      '#3B82F6', // Blue
+      '#EF4444', // Red
+      '#14B8A6', // Teal
+      '#F97316', // Orange
+      '#8B5CF6', // Violet
+      '#84CC16'  // Lime
+    ];
 
     users.forEach((user, index) => {
       const color = colors[index % colors.length];
@@ -207,27 +219,29 @@ export default function AdminLocationMonitor() {
           path: pathCoordinates,
           geodesic: true,
           strokeColor: color,
-          strokeOpacity: isSelected ? 1.0 : 0.6,
-          strokeWeight: isSelected ? 4 : 2,
-          map: googleMapRef.current
+          strokeOpacity: isSelected ? 1.0 : 0.7,
+          strokeWeight: isSelected ? 5 : 3,
+          map: googleMapRef.current,
+          zIndex: isSelected ? 1000 : index
         });
 
         polylinesRef.current.push(polyline);
 
-        // Add markers for location pings (smaller dots)
+        // Add markers for location pings (smaller dots with user color)
         user.locationHistory.forEach((loc, idx) => {
           const pingMarker = new window.google.maps.Marker({
             position: { lat: loc.lat, lng: loc.lng },
             map: googleMapRef.current,
-            title: `${user.userName} - Location ${idx + 1}`,
+            title: `${user.userName} - Point ${idx + 1}/${user.locationHistory.length}`,
             icon: {
               path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 4,
+              scale: isSelected ? 5 : 4,
               fillColor: color,
-              fillOpacity: 0.8,
+              fillOpacity: isSelected ? 1.0 : 0.8,
               strokeColor: '#ffffff',
-              strokeWeight: 1
-            }
+              strokeWeight: isSelected ? 2 : 1
+            },
+            zIndex: isSelected ? 999 : index
           });
 
           const pingInfo = new window.google.maps.InfoWindow({
@@ -471,10 +485,60 @@ export default function AdminLocationMonitor() {
                 {selectedUser ? `${selectedUser.userName}'s Route` : 'All Team Routes'}
               </h2>
               <p className="text-sm text-gray-400 mt-1">
-                🟢 Check In • 🔴 Check Out • Colored dots show route
+                🟢 Check In • 🔴 Check Out • Colored lines show travel routes
               </p>
             </div>
-            <div ref={mapRef} className="h-[600px]" />
+            <div className="relative">
+              <div ref={mapRef} className="h-[600px]" />
+              
+              {/* Color Legend Overlay */}
+              {users.length > 0 && (
+                <div className="absolute top-4 right-4 bg-dark-900/95 backdrop-blur-sm rounded-lg border border-white/10 p-3 max-w-xs">
+                  <h4 className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
+                    <MapPin size={12} className="text-brand-400" />
+                    User Routes
+                  </h4>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {users.map((user, index) => {
+                      const colors = [
+                        '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6', 
+                        '#EF4444', '#14B8A6', '#F97316', '#8B5CF6', '#84CC16'
+                      ];
+                      const color = colors[index % colors.length];
+                      const isSelected = selectedUser?.userId === user.userId;
+                      
+                      return (
+                        <button
+                          key={user.userId}
+                          onClick={() => setSelectedUser(user)}
+                          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors ${
+                            isSelected ? 'bg-white/10' : 'hover:bg-white/5'
+                          }`}
+                        >
+                          <div 
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: color }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-white truncate">{user.userName}</p>
+                            <p className="text-[10px] text-gray-400">
+                              {user.locationHistory?.length || 0} points
+                            </p>
+                          </div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            user.status === 'CHECKED_IN' 
+                              ? 'bg-green-500/20 text-green-400' 
+                              : 'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {user.status === 'CHECKED_IN' ? 'Active' : 'Done'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

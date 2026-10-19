@@ -10,6 +10,7 @@ import api from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import CheckInOutButton from '../components/CheckInOutButton';
+import UserLocationMap from '../components/UserLocationMap';
 
 const fadeUp = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
 
@@ -271,7 +272,17 @@ export default function Dashboard() {
             ))}
           </div>
         </motion.div>
+      </div>
 
+      {/* User Location Map - For non-admin users only */}
+      {user?.role !== 'ADMIN' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <UserLocationMap />
+        </motion.div>
+      )}
+
+      {/* Sales Activity & Follow-ups */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {user?.role !== 'SALES_EXECUTIVE' && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="glass-card p-5">
             <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">

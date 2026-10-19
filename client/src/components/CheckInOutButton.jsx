@@ -10,11 +10,33 @@ export default function CheckInOutButton() {
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
   const [loading, setLoading] = useState(false);
   const [currentLocation, setCurrentLocation] = useState(null);
+  const [locationPermission, setLocationPermission] = useState(null);
 
-  // Check current check-in status on mount
+  // Check current check-in status and location permission on mount
   useEffect(() => {
     checkStatus();
+    checkLocationPermission();
   }, []);
+
+  const checkLocationPermission = async () => {
+    try {
+      if ('permissions' in navigator) {
+        const result = await navigator.permissions.query({ name: 'geolocation' });
+        setLocationPermission(result.state);
+      } else {
+        // Try to get location to check if it's available
+        try {
+          await getCurrentLocation();
+          setLocationPermission('granted');
+        } catch {
+          setLocationPermission('prompt');
+        }
+      }
+    } catch (err) {
+      console.error('Permission check error:', err);
+      setLocationPermission('prompt');
+    }
+  };
 
   // Update elapsed time every second
   useEffect(() => {
@@ -81,6 +103,23 @@ export default function CheckInOutButton() {
   };
 
   const handleCheckIn = async () => {
+    // Check location permission first
+    if (locationPermission !== 'granted') {
+      toast.error('Please allow location access to check in', {
+        duration: 4000,
+        icon: '📍'
+      });
+      
+      // Try to request permission
+      try {
+        await getCurrentLocation();
+        setLocationPermission('granted');
+      } catch (err) {
+        toast.error('Location access is required for check-in. Please enable it in your browser settings.');
+        return;
+      }
+    }
+
     setLoading(true);
     const loadingToast = toast.loading('Getting location...');
 
@@ -211,16 +250,19 @@ export default function CheckInOutButton() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={isCheckedIn ? handleCheckOut : handleCheckIn}
-            disabled={loading}
+            disabled={loading || (locationPermission === 'denied')}
             className={`
               w-16 h-16 rounded-full shadow-xl flex items-center justify-center
               transition-all duration-300 border-2
               ${isCheckedIn 
                 ? 'bg-red-500 hover:bg-red-600 border-red-400' 
-                : 'bg-green-500 hover:bg-green-600 border-green-400'
+                : locationPermission === 'denied'
+                  ? 'bg-gray-500 cursor-not-allowed border-gray-400'
+                  : 'bg-green-500 hover:bg-green-600 border-green-400'
               }
               ${loading ? 'opacity-50 cursor-not-allowed' : ''}
             `}
+            title={locationPermission === 'denied' ? 'Location access required' : ''}
           >
             {loading ? (
               <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
