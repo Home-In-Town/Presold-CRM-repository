@@ -8,6 +8,7 @@ export default function AdminLocationMonitor() {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const mapRef = useRef(null);
@@ -220,6 +221,7 @@ export default function AdminLocationMonitor() {
       });
       
       console.log('✅ Admin map initialized successfully');
+      setMapReady(true); // Force re-render to hide overlay
     } catch (error) {
       console.error('❌ Error creating map:', error);
       throw error;
@@ -589,7 +591,7 @@ export default function AdminLocationMonitor() {
               <div ref={mapRef} className="h-[600px] w-full" style={{ minHeight: '600px' }} />
               
               {/* Loading overlay for map */}
-              {!googleMapRef.current && (
+              {!mapReady && (
                 <div className="absolute inset-0 bg-dark-900 flex items-center justify-center">
                   <div className="text-center">
                     <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-r-transparent mb-4"></div>
