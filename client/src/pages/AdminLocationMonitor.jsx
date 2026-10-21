@@ -8,6 +8,7 @@ export default function AdminLocationMonitor() {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const mapRef = useRef(null);
@@ -16,31 +17,73 @@ export default function AdminLocationMonitor() {
   const polylinesRef = useRef([]);
 
   useEffect(() => {
+    let mounted = true;
+    
     // Initialize map FIRST (fast)
     const initMapWhenReady = () => {
+      if (!mounted) return;
+      
       if (window.google && window.google.maps && mapRef.current && !googleMapRef.current) {
-        console.log('Admin: Initializing map...');
-        initializeMap();
-        setLoading(false); // Map is ready, stop showing loading spinner
+        console.log('🗺️  Admin: Initializing map...');
+        try {
+          initializeMap();
+          if (mounted) {
+            console.log('✅ Admin: Map initialized successfully');
+            setLoading(false); // Map is ready, stop showing loading spinner
+            setMapReady(true); // Hide overlay
+          }
+        } catch (error) {
+          console.error('❌ Admin: Map initialization failed:', error);
+          if (mounted) {
+            setLoading(false); // Still stop loading to show the page
+            setMapReady(true); // Hide overlay even on error
+            toast.error('Failed to initialize map');
+          }
+        }
       }
     };
 
     // Check if Google Maps is already loaded
     if (window.google && window.google.maps) {
-      initMapWhenReady();
+      console.log('⚡ Google Maps already loaded, initializing immediately');
+      setTimeout(initMapWhenReady, 100); // Small delay to ensure DOM is ready
     } else {
       // Wait for Google Maps to load
-      console.log('Admin: Waiting for Google Maps API...');
+      console.log('⏳ Admin: Waiting for Google Maps API...');
+      let attempts = 0;
+      const maxAttempts = 100; // 10 seconds max
+      
       const checkInterval = setInterval(() => {
+        if (!mounted) {
+          clearInterval(checkInterval);
+          return;
+        }
+        
+        attempts++;
         if (window.google && window.google.maps) {
-          console.log('Admin: Google Maps API loaded!');
+          console.log('✅ Admin: Google Maps API loaded!');
           clearInterval(checkInterval);
           initMapWhenReady();
+        } else if (attempts >= maxAttempts) {
+          console.error('❌ Admin: Google Maps API failed to load after 10 seconds');
+          clearInterval(checkInterval);
+          if (mounted) {
+            setLoading(false); // Stop loading even if Maps fails
+            setMapReady(true); // Hide overlay
+            toast.error('Google Maps failed to load. Please refresh the page.');
+          }
         }
       }, 100);
 
-      return () => clearInterval(checkInterval);
+      return () => {
+        mounted = false;
+        clearInterval(checkInterval);
+      };
     }
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -63,124 +106,152 @@ export default function AdminLocationMonitor() {
   const loadAllLocations = async () => {
     try {
       if (!loading) setRefreshing(true);
+      console.log('📡 Fetching admin locations...');
       const res = await api.get('/attendance/admin/all-locations');
+      console.log('✅ Received location data:', res.data.users?.length || 0, 'users');
       setUsers(res.data.users || []);
       setLastUpdate(new Date());
       setRefreshing(false);
+      
+      // Ensure loading is set to false after first successful load
+      if (loading) {
+        console.log('Setting loading to false after successful data fetch');
+        setLoading(false);
+      }
     } catch (err) {
-      console.error('Failed to load locations:', err);
+      console.error('❌ Failed to load locations:', err);
+      console.error('Error response:', err.response?.data);
       // Don't show toast error if it's the first load and user list is empty
       if (users.length > 0 || !loading) {
         toast.error(err.response?.data?.error || 'Failed to load locations');
       }
       setUsers([]);
       setRefreshing(false);
+      
+      // Set loading to false even on error so UI doesn't get stuck
+      if (loading) {
+        console.log('Setting loading to false after error');
+        setLoading(false);
+      }
     }
   };
 
   const initializeMap = () => {
-    // Default center (India)
-    const defaultCenter = { lat: 20.5937, lng: 78.9629 };
+    if (!mapRef.current) {
+      console.error('❌ Map container ref is null');
+      return;
+    }
     
-    googleMapRef.current = new window.google.maps.Map(mapRef.current, {
-      center: defaultCenter,
-      zoom: 5,
-      styles: [
-        { elementType: 'geometry', stylers: [{ color: '#1a1f2e' }] },
-        { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1f2e' }] },
-        { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-        {
-          featureType: 'administrative.locality',
-          elementType: 'labels.text.fill',
-          stylers: [{ color: '#d59563' }]
+    try {
+      // Default center (India)
+      const defaultCenter = { lat: 20.5937, lng: 78.9629 };
+      
+      console.log('🗺️  Creating Google Map instance...');
+      
+      googleMapRef.current = new window.google.maps.Map(mapRef.current, {
+        center: defaultCenter,
+        zoom: 5,
+        styles: [
+          { elementType: 'geometry', stylers: [{ color: '#1a1f2e' }] },
+          { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1f2e' }] },
+          { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+          {
+            featureType: 'administrative.locality',
+            elementType: 'labels.text.fill',
+            stylers: [{ color: '#d59563' }]
+          },
+          {
+            featureType: 'poi',
+            elementType: 'labels.text.fill',
+            stylers: [{ color: '#d59563' }]
+          },
+          {
+            featureType: 'poi.park',
+            elementType: 'geometry',
+            stylers: [{ color: '#263c3f' }]
+          },
+          {
+            featureType: 'poi.park',
+            elementType: 'labels.text.fill',
+            stylers: [{ color: '#6b9a76' }]
+          },
+          {
+            featureType: 'road',
+            elementType: 'geometry',
+            stylers: [{ color: '#38414e' }]
+          },
+          {
+            featureType: 'road',
+            elementType: 'geometry.stroke',
+            stylers: [{ color: '#212a37' }]
+          },
+          {
+            featureType: 'road',
+            elementType: 'labels.text.fill',
+            stylers: [{ color: '#9ca5b3' }]
+          },
+          {
+            featureType: 'road.highway',
+            elementType: 'geometry',
+            stylers: [{ color: '#746855' }]
+          },
+          {
+            featureType: 'road.highway',
+            elementType: 'geometry.stroke',
+            stylers: [{ color: '#1f2835' }]
+          },
+          {
+            featureType: 'road.highway',
+            elementType: 'labels.text.fill',
+            stylers: [{ color: '#f3d19c' }]
+          },
+          {
+            featureType: 'transit',
+            elementType: 'geometry',
+            stylers: [{ color: '#2f3948' }]
+          },
+          {
+            featureType: 'transit.station',
+            elementType: 'labels.text.fill',
+            stylers: [{ color: '#d59563' }]
+          },
+          {
+            featureType: 'water',
+            elementType: 'geometry',
+            stylers: [{ color: '#17263c' }]
+          },
+          {
+            featureType: 'water',
+            elementType: 'labels.text.fill',
+            stylers: [{ color: '#515c6d' }]
+          },
+          {
+            featureType: 'water',
+            elementType: 'labels.text.stroke',
+            stylers: [{ color: '#17263c' }]
+          }
+        ],
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+          position: window.google.maps.ControlPosition.TOP_RIGHT
         },
-        {
-          featureType: 'poi',
-          elementType: 'labels.text.fill',
-          stylers: [{ color: '#d59563' }]
+        streetViewControl: true,
+        streetViewControlOptions: {
+          position: window.google.maps.ControlPosition.RIGHT_BOTTOM
         },
-        {
-          featureType: 'poi.park',
-          elementType: 'geometry',
-          stylers: [{ color: '#263c3f' }]
-        },
-        {
-          featureType: 'poi.park',
-          elementType: 'labels.text.fill',
-          stylers: [{ color: '#6b9a76' }]
-        },
-        {
-          featureType: 'road',
-          elementType: 'geometry',
-          stylers: [{ color: '#38414e' }]
-        },
-        {
-          featureType: 'road',
-          elementType: 'geometry.stroke',
-          stylers: [{ color: '#212a37' }]
-        },
-        {
-          featureType: 'road',
-          elementType: 'labels.text.fill',
-          stylers: [{ color: '#9ca5b3' }]
-        },
-        {
-          featureType: 'road.highway',
-          elementType: 'geometry',
-          stylers: [{ color: '#746855' }]
-        },
-        {
-          featureType: 'road.highway',
-          elementType: 'geometry.stroke',
-          stylers: [{ color: '#1f2835' }]
-        },
-        {
-          featureType: 'road.highway',
-          elementType: 'labels.text.fill',
-          stylers: [{ color: '#f3d19c' }]
-        },
-        {
-          featureType: 'transit',
-          elementType: 'geometry',
-          stylers: [{ color: '#2f3948' }]
-        },
-        {
-          featureType: 'transit.station',
-          elementType: 'labels.text.fill',
-          stylers: [{ color: '#d59563' }]
-        },
-        {
-          featureType: 'water',
-          elementType: 'geometry',
-          stylers: [{ color: '#17263c' }]
-        },
-        {
-          featureType: 'water',
-          elementType: 'labels.text.fill',
-          stylers: [{ color: '#515c6d' }]
-        },
-        {
-          featureType: 'water',
-          elementType: 'labels.text.stroke',
-          stylers: [{ color: '#17263c' }]
+        fullscreenControl: true,
+        zoomControl: true,
+        zoomControlOptions: {
+          position: window.google.maps.ControlPosition.RIGHT_CENTER
         }
-      ],
-      mapTypeControl: true,
-      mapTypeControlOptions: {
-        position: window.google.maps.ControlPosition.TOP_RIGHT
-      },
-      streetViewControl: true,
-      streetViewControlOptions: {
-        position: window.google.maps.ControlPosition.RIGHT_BOTTOM
-      },
-      fullscreenControl: true,
-      zoomControl: true,
-      zoomControlOptions: {
-        position: window.google.maps.ControlPosition.RIGHT_CENTER
-      }
-    });
-    
-    console.log('Admin map initialized successfully');
+      });
+      
+      console.log('✅ Admin map initialized successfully');
+      setMapReady(true); // Force re-render to hide overlay
+    } catch (error) {
+      console.error('❌ Error creating map:', error);
+      throw error;
+    }
   };
 
   const updateMapMarkers = () => {
@@ -546,11 +617,12 @@ export default function AdminLocationMonitor() {
               <div ref={mapRef} className="h-[600px] w-full" style={{ minHeight: '600px' }} />
               
               {/* Loading overlay for map */}
-              {!googleMapRef.current && (
+              {!mapReady && (
                 <div className="absolute inset-0 bg-dark-900 flex items-center justify-center">
                   <div className="text-center">
                     <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-r-transparent mb-4"></div>
                     <p className="text-sm text-gray-400">Loading map...</p>
+                    <p className="text-xs text-gray-600 mt-2">Waiting for Google Maps API</p>
                   </div>
                 </div>
               )}

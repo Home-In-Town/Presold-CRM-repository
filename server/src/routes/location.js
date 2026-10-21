@@ -319,20 +319,22 @@ router.get('/check-in/today', authenticate, async (req, res) => {
 // GET /api/location/admin/all-users - Get all users' latest locations (Admin only)
 router.get('/admin/all-users', authenticate, requireAdmin, async (req, res) => {
   try {
-    // Get all active users
-    const users = await prisma.user.findMany({
+    // Get all active users (filter deletedAt in code due to MongoDB null query bug)
+    const allUsers = await prisma.user.findMany({
       where: {
-        isActive: true,
-        deletedAt: null
+        isActive: true
       },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
-        avatar: true
+        avatar: true,
+        deletedAt: true
       }
     });
+    
+    const users = allUsers.filter(u => !u.deletedAt);
 
     const isDev = process.env.NODE_ENV === 'development';
     if (isDev) console.log(`Found ${users.length} active users`);
@@ -486,15 +488,17 @@ router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
     today.setHours(0, 0, 0, 0);
 
     const [
-      totalActiveUsers,
+      allActiveUsers,
       checkedInUsers,
       todayLocations,
       todayCheckIns
     ] = await Promise.all([
-      prisma.user.count({
+      prisma.user.findMany({
         where: {
-          isActive: true,
-          deletedAt: null
+          isActive: true
+        },
+        select: {
+          deletedAt: true
         }
       }),
       trackingDb.checkInOut.count({
@@ -517,6 +521,9 @@ router.get('/admin/stats', authenticate, requireAdmin, async (req, res) => {
         }
       })
     ]);
+    
+    // Filter deletedAt in code (MongoDB null query bug)
+    const totalActiveUsers = allActiveUsers.filter(u => !u.deletedAt).length;
 
     res.json({
       success: true,

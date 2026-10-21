@@ -6,7 +6,7 @@ import {
   CheckCircle, XCircle, FileText, Image as ImageIcon, Download,
   ExternalLink, Edit, Trash2
 } from 'lucide-react';
-import api from '../services/api';
+import api, { resolveFileUrl } from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -47,9 +47,27 @@ export default function ProjectDetail() {
   const loadProject = async () => {
     try {
       const response = await api.get(`/projects/${id}`);
-      setProject(response.data.project);
-      setSelectedImage(response.data.project.coverImageUrl);
+      const projectData = response.data.project;
+      
+      // Resolve file URLs
+      if (projectData.coverImageUrl) {
+        projectData.coverImageUrl = resolveFileUrl(projectData.coverImageUrl);
+      }
+      if (projectData.layoutImageUrl) {
+        projectData.layoutImageUrl = resolveFileUrl(projectData.layoutImageUrl);
+      }
+      if (projectData.brochureUrl) {
+        projectData.brochureUrl = resolveFileUrl(projectData.brochureUrl);
+      }
+      if (projectData.galleryImageUrls) {
+        const gallery = JSON.parse(projectData.galleryImageUrls);
+        projectData.galleryImageUrls = JSON.stringify(gallery.map(url => resolveFileUrl(url)));
+      }
+      
+      setProject(projectData);
+      setSelectedImage(projectData.coverImageUrl);
     } catch (error) {
+      console.error('Load project error:', error);
       toast.error('Failed to load project');
       navigate('/projects');
     } finally {

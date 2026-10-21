@@ -28,7 +28,8 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const { category, projectStatus, city, search } = req.query;
     
-    const where = { deletedAt: null };
+    // Don't filter deletedAt in the database query for MongoDB - filter in code instead
+    const where = {};
     
     if (category) where.category = category;
     if (projectStatus) where.projectStatus = projectStatus;
@@ -40,10 +41,13 @@ router.get('/', authenticate, async (req, res) => {
       ];
     }
 
-    const projects = await trackingDb.project.findMany({
+    const allProjects = await trackingDb.project.findMany({
       where,
       orderBy: { createdAt: 'desc' },
     });
+
+    // Filter out deleted projects in code (MongoDB null query issue)
+    const projects = allProjects.filter(p => !p.deletedAt);
 
     res.json({ projects });
   } catch (err) {
@@ -55,26 +59,23 @@ router.get('/', authenticate, async (req, res) => {
 // GET /api/projects/stats - Get project statistics (Admin only)
 router.get('/stats', authenticate, requireAdmin, async (req, res) => {
   try {
-    const totalProjects = await trackingDb.project.count({
-      where: { deletedAt: null }
-    });
+    const allProjects = await trackingDb.project.findMany();
+    const activeProjects = allProjects.filter(p => !p.deletedAt);
+    
+    const totalProjects = activeProjects.length;
 
-    const byStatus = await trackingDb.project.groupBy({
-      by: ['projectStatus'],
-      where: { deletedAt: null },
-      _count: true,
-    });
-
-    const byCategory = await trackingDb.project.groupBy({
-      by: ['category'],
-      where: { deletedAt: null },
-      _count: true,
+    const byStatus = {};
+    const byCategory = {};
+    
+    activeProjects.forEach(p => {
+      byStatus[p.projectStatus] = (byStatus[p.projectStatus] || 0) + 1;
+      byCategory[p.category] = (byCategory[p.category] || 0) + 1;
     });
 
     res.json({
       totalProjects,
-      byStatus,
-      byCategory,
+      byStatus: Object.entries(byStatus).map(([projectStatus, count]) => ({ projectStatus, _count: count })),
+      byCategory: Object.entries(byCategory).map(([category, count]) => ({ category, _count: count })),
     });
   } catch (err) {
     console.error('Failed to fetch project stats:', err);
@@ -89,11 +90,16 @@ router.get('/:id', authenticate, async (req, res) => {
       where: { id: req.params.id },
     });
 
-    if (!project || project.deletedAt) {
+    if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    res.json(project);
+    // Check if deleted (MongoDB null query bug workaround)
+    if (project.deletedAt) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    res.json({ project }); // Wrap in object to match frontend expectation
   } catch (err) {
     console.error('Failed to fetch project:', err);
     res.status(500).json({ error: 'Failed to fetch project' });
