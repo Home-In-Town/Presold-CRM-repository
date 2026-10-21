@@ -28,7 +28,7 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const { category, projectStatus, city, search } = req.query;
     
-    const where = { deletedAt: { isSet: false } };
+    const where = { deletedAt: null };
     
     if (category) where.category = category;
     if (projectStatus) where.projectStatus = projectStatus;
@@ -56,18 +56,18 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/stats', authenticate, requireAdmin, async (req, res) => {
   try {
     const totalProjects = await trackingDb.project.count({
-      where: { deletedAt: { isSet: false } }
+      where: { deletedAt: null }
     });
 
     const byStatus = await trackingDb.project.groupBy({
       by: ['projectStatus'],
-      where: { deletedAt: { isSet: false } },
+      where: { deletedAt: null },
       _count: true,
     });
 
     const byCategory = await trackingDb.project.groupBy({
       by: ['category'],
-      where: { deletedAt: { isSet: false } },
+      where: { deletedAt: null },
       _count: true,
     });
 

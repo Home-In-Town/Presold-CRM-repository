@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, MapPin, User, Clock, Phone, Building2, Plus, Filter, Search, ChevronDown, ChevronUp, Volume2, FileText, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import api, { resolveFileUrl } from '../services/api';
 import toast from 'react-hot-toast';
 import AddMeetingModal from '../components/AddMeetingModal';
 
@@ -303,7 +303,7 @@ export default function Meetings() {
                     {meeting.selfieUrl && (
                       <div className="flex-shrink-0">
                         <img
-                          src={meeting.selfieUrl}
+                          src={resolveFileUrl(meeting.selfieUrl)}
                           alt="Meeting selfie"
                           className="w-16 h-16 rounded-lg object-cover border border-white/10"
                         />
@@ -351,7 +351,7 @@ export default function Meetings() {
                               </span>
                             )}
                           </div>
-                          <audio controls className="w-full" src={meeting.audioUrl}>
+                          <audio controls className="w-full" src={resolveFileUrl(meeting.audioUrl)}>
                             Your browser does not support audio playback.
                           </audio>
                         </div>
@@ -365,7 +365,7 @@ export default function Meetings() {
                             <h4 className="text-sm font-medium text-white">Visiting Card</h4>
                           </div>
                           <img
-                            src={meeting.visitingCardUrl}
+                            src={resolveFileUrl(meeting.visitingCardUrl)}
                             alt="Visiting card"
                             className="w-full max-w-md rounded-lg border border-white/10"
                           />
