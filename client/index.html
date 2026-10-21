@@ -7,8 +7,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-    <!-- Google Maps API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAzw6zVDMG0KFuWIeQtg6mlasy-hghuZM4&libraries=places" async defer></script>
+    <!-- Google Maps API with callback -->
+    <script>
+      window.initGoogleMaps = function() {
+        console.log('✅ Google Maps API loaded successfully');
+        window.googleMapsReady = true;
+      };
+      window.googleMapsReady = false;
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAzw6zVDMG0KFuWIeQtg6mlasy-hghuZM4&libraries=places&callback=initGoogleMaps" async defer></script>
     <title>Pre-Sold CRM</title>
   </head>
   <body class="dark bg-dark-900 text-white antialiased">
