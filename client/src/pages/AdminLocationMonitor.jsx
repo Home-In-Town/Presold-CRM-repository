@@ -19,9 +19,16 @@ export default function AdminLocationMonitor() {
     // Initialize map FIRST (fast)
     const initMapWhenReady = () => {
       if (window.google && window.google.maps && mapRef.current && !googleMapRef.current) {
-        console.log('Admin: Initializing map...');
-        initializeMap();
-        setLoading(false); // Map is ready, stop showing loading spinner
+        console.log('🗺️  Admin: Initializing map...');
+        try {
+          initializeMap();
+          console.log('✅ Admin: Map initialized successfully');
+          setLoading(false); // Map is ready, stop showing loading spinner
+        } catch (error) {
+          console.error('❌ Admin: Map initialization failed:', error);
+          setLoading(false); // Still stop loading to show the page
+          toast.error('Failed to initialize map');
+        }
       }
     };
 
@@ -30,12 +37,21 @@ export default function AdminLocationMonitor() {
       initMapWhenReady();
     } else {
       // Wait for Google Maps to load
-      console.log('Admin: Waiting for Google Maps API...');
+      console.log('⏳ Admin: Waiting for Google Maps API...');
+      let attempts = 0;
+      const maxAttempts = 100; // 10 seconds max
+      
       const checkInterval = setInterval(() => {
+        attempts++;
         if (window.google && window.google.maps) {
-          console.log('Admin: Google Maps API loaded!');
+          console.log('✅ Admin: Google Maps API loaded!');
           clearInterval(checkInterval);
           initMapWhenReady();
+        } else if (attempts >= maxAttempts) {
+          console.error('❌ Admin: Google Maps API failed to load after 10 seconds');
+          clearInterval(checkInterval);
+          setLoading(false); // Stop loading even if Maps fails
+          toast.error('Google Maps failed to load. Please refresh the page.');
         }
       }, 100);
 
@@ -63,18 +79,33 @@ export default function AdminLocationMonitor() {
   const loadAllLocations = async () => {
     try {
       if (!loading) setRefreshing(true);
+      console.log('📡 Fetching admin locations...');
       const res = await api.get('/attendance/admin/all-locations');
+      console.log('✅ Received location data:', res.data.users?.length || 0, 'users');
       setUsers(res.data.users || []);
       setLastUpdate(new Date());
       setRefreshing(false);
+      
+      // Ensure loading is set to false after first successful load
+      if (loading) {
+        console.log('Setting loading to false after successful data fetch');
+        setLoading(false);
+      }
     } catch (err) {
-      console.error('Failed to load locations:', err);
+      console.error('❌ Failed to load locations:', err);
+      console.error('Error response:', err.response?.data);
       // Don't show toast error if it's the first load and user list is empty
       if (users.length > 0 || !loading) {
         toast.error(err.response?.data?.error || 'Failed to load locations');
       }
       setUsers([]);
       setRefreshing(false);
+      
+      // Set loading to false even on error so UI doesn't get stuck
+      if (loading) {
+        console.log('Setting loading to false after error');
+        setLoading(false);
+      }
     }
   };
 
