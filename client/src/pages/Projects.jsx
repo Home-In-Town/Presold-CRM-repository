@@ -5,7 +5,7 @@ import {
   Building2, Search, Filter, MapPin, DollarSign, Plus,
   Calendar, User, Eye, Edit, Trash2, RefreshCw, Home
 } from 'lucide-react';
-import api from '../services/api';
+import api, { resolveFileUrl } from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import AddProjectModal from '../components/AddProjectModal';
@@ -244,7 +244,7 @@ export default function Projects() {
               {/* Cover Image */}
               <div className="relative h-48 overflow-hidden">
                 <img
-                  src={project.coverImageUrl || '/placeholder-project.jpg'}
+                  src={project.coverImageUrl ? resolveFileUrl(project.coverImageUrl) : '/placeholder-project.jpg'}
                   alt={project.projectName}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
