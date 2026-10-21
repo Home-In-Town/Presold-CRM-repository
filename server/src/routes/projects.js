@@ -90,11 +90,16 @@ router.get('/:id', authenticate, async (req, res) => {
       where: { id: req.params.id },
     });
 
-    if (!project || project.deletedAt) {
+    if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    res.json(project);
+    // Check if deleted (MongoDB null query bug workaround)
+    if (project.deletedAt) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    res.json({ project }); // Wrap in object to match frontend expectation
   } catch (err) {
     console.error('Failed to fetch project:', err);
     res.status(500).json({ error: 'Failed to fetch project' });
