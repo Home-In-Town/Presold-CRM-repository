@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.js';
 import { trackingDb } from '../config/database.js';
+import { runManualCleanup } from '../jobs/monthlyCleanup.js';
 
 const router = express.Router();
 
@@ -473,6 +474,216 @@ router.get('/admin/all-locations', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Admin all locations error:', err);
     res.status(500).json({ error: 'Failed to fetch locations' });
+  }
+});
+
+// GET /api/attendance/admin/monthly-tracking - Admin only: Get monthly tracking for a specific user or all users
+router.get('/admin/monthly-tracking', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId, year, month } = req.query;
+
+    // Parse year and month (default to current month)
+    const targetYear = year ? parseInt(year) : new Date().getFullYear();
+    const targetMonth = month ? parseInt(month) - 1 : new Date().getMonth(); // JS months are 0-indexed
+
+    // Calculate date range for the month
+    const startDate = new Date(targetYear, targetMonth, 1);
+    const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+
+    console.log(`Fetching monthly tracking: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    if (userId) console.log(`Filtering for user: ${userId}`);
+
+    // Build where clause
+    const whereClause = {
+      checkInTime: {
+        gte: startDate,
+        lte: endDate
+      }
+    };
+
+    if (userId) {
+      whereClause.userId = userId;
+    }
+
+    // Get all check-ins for the month
+    const checkIns = await trackingDb.checkInOut.findMany({
+      where: whereClause,
+      orderBy: {
+        checkInTime: 'desc'
+      }
+    });
+
+    console.log(`Found ${checkIns.length} check-ins for the month`);
+
+    // Import prisma from main database to get user info
+    const { default: prisma } = await import('../config/database.js');
+    
+    // For each check-in, get user info and location history
+    const trackingData = await Promise.all(
+      checkIns.map(async (checkIn) => {
+        // Get user from main database
+        const user = await prisma.user.findUnique({
+          where: { id: checkIn.userId },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        });
+
+        // Get location history for this check-in session
+        const locationHistory = await trackingDb.locationHistory.findMany({
+          where: {
+            userId: checkIn.userId,
+            timestamp: {
+              gte: checkIn.checkInTime,
+              ...(checkIn.checkOutTime && { lte: checkIn.checkOutTime })
+            }
+          },
+          orderBy: {
+            timestamp: 'asc'
+          }
+        });
+
+        // Calculate total distance traveled (approximate)
+        let totalDistance = 0;
+        if (locationHistory.length > 1) {
+          for (let i = 1; i < locationHistory.length; i++) {
+            const prev = locationHistory[i - 1];
+            const curr = locationHistory[i];
+            totalDistance += calculateDistance(
+              prev.latitude, prev.longitude,
+              curr.latitude, curr.longitude
+            );
+          }
+        }
+
+        // Calculate work duration
+        const checkInTime = new Date(checkIn.checkInTime);
+        const checkOutTime = checkIn.checkOutTime ? new Date(checkIn.checkOutTime) : new Date();
+        const durationMs = checkOutTime - checkInTime;
+        const durationHours = (durationMs / (1000 * 60 * 60)).toFixed(2);
+
+        return {
+          date: checkIn.checkInTime,
+          userId: checkIn.userId,
+          userName: user?.name || 'Unknown',
+          userEmail: user?.email || '',
+          status: checkIn.status,
+          checkIn: {
+            time: checkIn.checkInTime,
+            lat: checkIn.checkInLat,
+            lng: checkIn.checkInLng,
+            address: checkIn.checkInAddress
+          },
+          checkOut: checkIn.checkOutTime ? {
+            time: checkIn.checkOutTime,
+            lat: checkIn.checkOutLat,
+            lng: checkIn.checkOutLng,
+            address: checkIn.checkOutAddress
+          } : null,
+          locationHistory: locationHistory.map(loc => ({
+            lat: loc.latitude,
+            lng: loc.longitude,
+            timestamp: loc.timestamp,
+            accuracy: loc.accuracy,
+            address: loc.address
+          })),
+          stats: {
+            totalLocationPings: locationHistory.length,
+            totalDistanceKm: totalDistance.toFixed(2),
+            durationHours: durationHours
+          }
+        };
+      })
+    );
+
+    // Group by user if fetching all users
+    let response;
+    if (userId) {
+      response = {
+        userId,
+        userName: trackingData[0]?.userName,
+        month: `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`,
+        totalDays: trackingData.length,
+        sessions: trackingData
+      };
+    } else {
+      // Group by user
+      const userGroups = {};
+      trackingData.forEach(session => {
+        if (!userGroups[session.userId]) {
+          userGroups[session.userId] = {
+            userId: session.userId,
+            userName: session.userName,
+            userEmail: session.userEmail,
+            sessions: []
+          };
+        }
+        userGroups[session.userId].sessions.push(session);
+      });
+
+      response = {
+        month: `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`,
+        totalUsers: Object.keys(userGroups).length,
+        users: Object.values(userGroups).map(user => ({
+          ...user,
+          totalDays: user.sessions.length,
+          totalHours: user.sessions.reduce((sum, s) => sum + parseFloat(s.stats.durationHours), 0).toFixed(2),
+          totalDistanceKm: user.sessions.reduce((sum, s) => sum + parseFloat(s.stats.totalDistanceKm), 0).toFixed(2)
+        }))
+      };
+    }
+
+    res.json(response);
+  } catch (err) {
+    console.error('Monthly tracking error:', err);
+    res.status(500).json({ error: 'Failed to fetch monthly tracking data' });
+  }
+});
+
+// Helper function to calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function toRad(degrees) {
+  return degrees * (Math.PI / 180);
+}
+
+// POST /api/attendance/admin/cleanup - Admin only: Manually trigger cleanup of old location data
+router.post('/admin/cleanup', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { monthsToKeep } = req.body;
+    const result = await runManualCleanup(monthsToKeep || 2);
+    
+    res.json({
+      success: true,
+      message: 'Cleanup completed successfully',
+      ...result
+    });
+  } catch (err) {
+    console.error('Manual cleanup error:', err);
+    res.status(500).json({ error: 'Failed to run cleanup' });
   }
 });
 

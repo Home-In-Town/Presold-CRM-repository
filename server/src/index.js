@@ -27,6 +27,7 @@ import meetingRoutes from './routes/meetings.js';
 import locationRoutes from './routes/location.js';
 import projectRoutes from './routes/projects.js';
 import attendanceRoutes from './routes/attendance.js';
+import { scheduleMonthlyCleanup } from './jobs/monthlyCleanup.js';
 
 const app = express();
 const PORT = Number(process.env.PORT || 5001);
@@ -161,6 +162,9 @@ async function startServer() {
   ensureAdminAccount().catch(err => {
     console.error('Admin bootstrap failed (non-fatal):', err.message);
   });
+  
+  // Schedule monthly cleanup job
+  scheduleMonthlyCleanup();
 }
 
 startServer();
