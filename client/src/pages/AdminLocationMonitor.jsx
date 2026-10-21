@@ -17,25 +17,36 @@ export default function AdminLocationMonitor() {
   const polylinesRef = useRef([]);
 
   useEffect(() => {
+    let mounted = true;
+    
     // Initialize map FIRST (fast)
     const initMapWhenReady = () => {
+      if (!mounted) return;
+      
       if (window.google && window.google.maps && mapRef.current && !googleMapRef.current) {
         console.log('🗺️  Admin: Initializing map...');
         try {
           initializeMap();
-          console.log('✅ Admin: Map initialized successfully');
-          setLoading(false); // Map is ready, stop showing loading spinner
+          if (mounted) {
+            console.log('✅ Admin: Map initialized successfully');
+            setLoading(false); // Map is ready, stop showing loading spinner
+            setMapReady(true); // Hide overlay
+          }
         } catch (error) {
           console.error('❌ Admin: Map initialization failed:', error);
-          setLoading(false); // Still stop loading to show the page
-          toast.error('Failed to initialize map');
+          if (mounted) {
+            setLoading(false); // Still stop loading to show the page
+            setMapReady(true); // Hide overlay even on error
+            toast.error('Failed to initialize map');
+          }
         }
       }
     };
 
     // Check if Google Maps is already loaded
     if (window.google && window.google.maps) {
-      initMapWhenReady();
+      console.log('⚡ Google Maps already loaded, initializing immediately');
+      setTimeout(initMapWhenReady, 100); // Small delay to ensure DOM is ready
     } else {
       // Wait for Google Maps to load
       console.log('⏳ Admin: Waiting for Google Maps API...');
@@ -43,6 +54,11 @@ export default function AdminLocationMonitor() {
       const maxAttempts = 100; // 10 seconds max
       
       const checkInterval = setInterval(() => {
+        if (!mounted) {
+          clearInterval(checkInterval);
+          return;
+        }
+        
         attempts++;
         if (window.google && window.google.maps) {
           console.log('✅ Admin: Google Maps API loaded!');
@@ -51,13 +67,23 @@ export default function AdminLocationMonitor() {
         } else if (attempts >= maxAttempts) {
           console.error('❌ Admin: Google Maps API failed to load after 10 seconds');
           clearInterval(checkInterval);
-          setLoading(false); // Stop loading even if Maps fails
-          toast.error('Google Maps failed to load. Please refresh the page.');
+          if (mounted) {
+            setLoading(false); // Stop loading even if Maps fails
+            setMapReady(true); // Hide overlay
+            toast.error('Google Maps failed to load. Please refresh the page.');
+          }
         }
       }, 100);
 
-      return () => clearInterval(checkInterval);
+      return () => {
+        mounted = false;
+        clearInterval(checkInterval);
+      };
     }
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
