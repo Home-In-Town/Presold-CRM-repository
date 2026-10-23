@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, TrendingUp, Target, Zap, Calendar, Phone, ArrowUpRight,
-  ArrowDownRight, Plus, Clock, CheckCircle2, Activity, Trophy
+  ArrowDownRight, Plus, Clock, CheckCircle2, Activity, Trophy,
+  BookOpen, FileText, BarChart3, Library
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../services/api';
@@ -168,10 +169,88 @@ export default function Dashboard() {
         </motion.div>
       )}
 
+      {/* Mobile Quick Access Shortcuts - For regular users: above the map */}
+      {user?.role !== 'ADMIN' && (
+        <motion.div {...fadeUp} className="block lg:hidden">
+          <div className="glass-card p-3">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Quick Access</h3>
+            <div className="grid grid-cols-4 gap-2">
+              <button
+                onClick={() => navigate('/pipeline')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+              >
+                <Target size={20} className="text-brand-400" />
+                <span className="text-[10px] font-medium text-gray-300">Pipeline</span>
+              </button>
+              <button
+                onClick={() => navigate('/playbook')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+              >
+                <BookOpen size={20} className="text-purple-400" />
+                <span className="text-[10px] font-medium text-gray-300">Playbook</span>
+              </button>
+              <button
+                onClick={() => navigate('/reports')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+              >
+                <BarChart3 size={20} className="text-green-400" />
+                <span className="text-[10px] font-medium text-gray-300">Reports</span>
+              </button>
+              <button
+                onClick={() => navigate('/assets')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+              >
+                <Library size={20} className="text-amber-400" />
+                <span className="text-[10px] font-medium text-gray-300">Library</span>
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* User Location Map - For non-admin users only (TOP OF PAGE) */}
       {user?.role !== 'ADMIN' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <UserLocationMap />
+        </motion.div>
+      )}
+
+      {/* Mobile Quick Access Shortcuts - For admins: above stat cards */}
+      {user?.role === 'ADMIN' && (
+        <motion.div {...fadeUp} className="block lg:hidden">
+          <div className="glass-card p-3">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Quick Access</h3>
+            <div className="grid grid-cols-4 gap-2">
+              <button
+                onClick={() => navigate('/attendance-report')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+              >
+                <CheckCircle2 size={20} className="text-green-400" />
+                <span className="text-[10px] font-medium text-gray-300">Attendance</span>
+              </button>
+              <button
+                onClick={() => navigate('/admin/location-monitor')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+              >
+                <Activity size={20} className="text-blue-400" />
+                <span className="text-[10px] font-medium text-gray-300">Location</span>
+              </button>
+              <button
+                onClick={() => navigate('/reports')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+              >
+                <BarChart3 size={20} className="text-purple-400" />
+                <span className="text-[10px] font-medium text-gray-300">Reports</span>
+              </button>
+              <button
+                onClick={() => navigate('/assets')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+              >
+                <Library size={20} className="text-amber-400" />
+                <span className="text-[10px] font-medium text-gray-300">Library</span>
+              </button>
+            </div>
+          </div>
         </motion.div>
       )}
 

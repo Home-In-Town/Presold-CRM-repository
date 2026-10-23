@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Users, Navigation, Clock, RefreshCw, User, Activity, LogOut, LogIn } from 'lucide-react';
+import { MapPin, Users, Navigation, Clock, RefreshCw, User, Activity, LogOut, LogIn, 
+  Target, BookOpen, BarChart3, Library } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function AdminLocationMonitor() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -29,13 +31,11 @@ export default function AdminLocationMonitor() {
           initializeMap();
           if (mounted) {
             console.log('✅ Admin: Map initialized successfully');
-            setLoading(false); // Map is ready, stop showing loading spinner
             setMapReady(true); // Hide overlay
           }
         } catch (error) {
           console.error('❌ Admin: Map initialization failed:', error);
           if (mounted) {
-            setLoading(false); // Still stop loading to show the page
             setMapReady(true); // Hide overlay even on error
             toast.error('Failed to initialize map');
           }
@@ -68,7 +68,6 @@ export default function AdminLocationMonitor() {
           console.error('❌ Admin: Google Maps API failed to load after 10 seconds');
           clearInterval(checkInterval);
           if (mounted) {
-            setLoading(false); // Stop loading even if Maps fails
             setMapReady(true); // Hide overlay
             toast.error('Google Maps failed to load. Please refresh the page.');
           }
@@ -105,34 +104,19 @@ export default function AdminLocationMonitor() {
 
   const loadAllLocations = async () => {
     try {
-      if (!loading) setRefreshing(true);
+      setRefreshing(true);
       console.log('📡 Fetching admin locations...');
       const res = await api.get('/attendance/admin/all-locations');
       console.log('✅ Received location data:', res.data.users?.length || 0, 'users');
       setUsers(res.data.users || []);
       setLastUpdate(new Date());
       setRefreshing(false);
-      
-      // Ensure loading is set to false after first successful load
-      if (loading) {
-        console.log('Setting loading to false after successful data fetch');
-        setLoading(false);
-      }
     } catch (err) {
       console.error('❌ Failed to load locations:', err);
       console.error('Error response:', err.response?.data);
-      // Don't show toast error if it's the first load and user list is empty
-      if (users.length > 0 || !loading) {
-        toast.error(err.response?.data?.error || 'Failed to load locations');
-      }
+      toast.error(err.response?.data?.error || 'Failed to load locations');
       setUsers([]);
       setRefreshing(false);
-      
-      // Set loading to false even on error so UI doesn't get stuck
-      if (loading) {
-        console.log('Setting loading to false after error');
-        setLoading(false);
-      }
     }
   };
 
@@ -432,19 +416,44 @@ export default function AdminLocationMonitor() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-r-transparent"></div>
-          <p className="mt-4 text-sm text-gray-400">Loading location data...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
+      {/* Mobile Quick Access Shortcuts */}
+      <div className="block lg:hidden">
+        <div className="glass-card p-3">
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => navigate('/pipeline')}
+              className="flex flex-col items-center gap-1 p-2 rounded-lg bg-dark-800/50 hover:bg-dark-700 border border-white/5 hover:border-brand-500/30 transition-all"
+            >
+              <Target size={20} className="text-brand-400" />
+              <span className="text-[10px] text-gray-300 font-medium">Pipeline</span>
+            </button>
+            <button
+              onClick={() => navigate('/playbook')}
+              className="flex flex-col items-center gap-1 p-2 rounded-lg bg-dark-800/50 hover:bg-dark-700 border border-white/5 hover:border-brand-500/30 transition-all"
+            >
+              <BookOpen size={20} className="text-brand-400" />
+              <span className="text-[10px] text-gray-300 font-medium">Playbook</span>
+            </button>
+            <button
+              onClick={() => navigate('/reports')}
+              className="flex flex-col items-center gap-1 p-2 rounded-lg bg-dark-800/50 hover:bg-dark-700 border border-white/5 hover:border-brand-500/30 transition-all"
+            >
+              <BarChart3 size={20} className="text-brand-400" />
+              <span className="text-[10px] text-gray-300 font-medium">Reports</span>
+            </button>
+            <button
+              onClick={() => navigate('/assets')}
+              className="flex flex-col items-center gap-1 p-2 rounded-lg bg-dark-800/50 hover:bg-dark-700 border border-white/5 hover:border-brand-500/30 transition-all"
+            >
+              <Library size={20} className="text-brand-400" />
+              <span className="text-[10px] text-gray-300 font-medium">Library</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
