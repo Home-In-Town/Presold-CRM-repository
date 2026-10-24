@@ -140,7 +140,10 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
   // Audio recording functions
   const startRecording = async () => {
     try {
+      // Request microphone permission explicitly
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Permission granted, proceed with recording
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
 
@@ -167,7 +170,13 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
 
       toast.success('Recording started');
     } catch (err) {
-      toast.error('Failed to start recording: ' + err.message);
+      // Permission denied or error
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        toast.error('Microphone permission denied. Please allow microphone access in your browser settings.');
+      } else {
+        toast.error('Failed to start recording: ' + err.message);
+      }
+      console.error('Recording error:', err);
     }
   };
 
@@ -200,15 +209,23 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
   const validateStep = (currentStep) => {
     switch(currentStep) {
       case 1:
-        // Step 1: Basic Info & Photos validation
+        // Step 1: Audio Recording validation (MANDATORY FIRST)
+        if (!audioBlob) {
+          toast.error('Audio recording is mandatory!');
+          return false;
+        }
+        return true;
+
+      case 2:
+        // Step 2: Basic Info & Photos validation
         if (!selfieFile) {
           toast.error('Selfie photo is required');
           return false;
         }
         return true;
 
-      case 2:
-        // Step 2: Office & Lead Details validation
+      case 3:
+        // Step 3: Office & Lead Details validation
         if (!formData.officeName.trim()) {
           toast.error('Office name is required');
           return false;
@@ -227,14 +244,6 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
         }
         if (!formData.personContact.trim()) {
           toast.error('Contact number is required');
-          return false;
-        }
-        return true;
-
-      case 3:
-        // Step 3: Audio & Notes validation
-        if (!audioBlob) {
-          toast.error('Audio recording is mandatory!');
           return false;
         }
         return true;
@@ -361,8 +370,94 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
 
           {/* Content */}
           <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-            {/* Step 1: Basic Info & Photos */}
+            {/* Step 1: Audio Recording (FIRST AND MANDATORY) */}
             {step === 1 && (
+              <div className="space-y-6">
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-amber-300 font-medium">
+                    📍 Important: Audio recording is mandatory for every meeting
+                  </p>
+                </div>
+
+                {/* Audio Recording */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Audio Recording * (Mandatory)
+                  </label>
+                  {!audioUrl ? (
+                    <div className="bg-dark-900 rounded-lg p-6 text-center">
+                      {isRecording ? (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-center gap-3">
+                            <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" />
+                            <span className="text-white font-mono text-xl">{formatTime(recordingTime)}</span>
+                          </div>
+                          <button
+                            onClick={stopRecording}
+                            className="btn-danger flex items-center justify-center gap-2 mx-auto"
+                          >
+                            <Square size={18} />
+                            <span>Stop Recording</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={startRecording}
+                          className="btn-primary flex items-center justify-center gap-2 mx-auto"
+                        >
+                          <Mic size={18} />
+                          <span>Start Recording</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-dark-900 rounded-lg p-4">
+                      <div className="flex items-center gap-3">
+                        <audio src={audioUrl} controls className="flex-1" />
+                        <button
+                          onClick={deleteRecording}
+                          className="p-2 bg-red-500 rounded-lg hover:bg-red-600"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <p className="text-sm text-green-400 mt-2">✓ Recording saved ({formatTime(recordingTime)})</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Add any notes about the meeting..."
+                    rows={4}
+                    className="input w-full"
+                  />
+                </div>
+
+                {/* Conversation */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Conversation Summary (Optional)
+                  </label>
+                  <textarea
+                    value={formData.conversation}
+                    onChange={(e) => setFormData({ ...formData, conversation: e.target.value })}
+                    placeholder="Summarize the key points discussed..."
+                    rows={4}
+                    className="input w-full"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Basic Info & Photos */}
+            {step === 2 && (
               <div className="space-y-6">
                 {/* Date & Time (Auto-captured) */}
                 <div>
@@ -477,8 +572,8 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
               </div>
             )}
 
-            {/* Step 2: Office & Lead Details */}
-            {step === 2 && (
+            {/* Step 3: Office & Lead Details */}
+            {step === 3 && (
               <div className="space-y-6">
                 {/* Lead Search */}
                 {/* Person Name */}
@@ -553,86 +648,6 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
                         : 'Capture Current Location'}
                     </span>
                   </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Audio, Notes & Conversation */}
-            {step === 3 && (
-              <div className="space-y-6">
-                {/* Audio Recording */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Audio Recording * (Mandatory)
-                  </label>
-                  {!audioUrl ? (
-                    <div className="bg-dark-900 rounded-lg p-6 text-center">
-                      {isRecording ? (
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-center gap-3">
-                            <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" />
-                            <span className="text-white font-mono text-xl">{formatTime(recordingTime)}</span>
-                          </div>
-                          <button
-                            onClick={stopRecording}
-                            className="btn-danger flex items-center justify-center gap-2 mx-auto"
-                          >
-                            <Square size={18} />
-                            <span>Stop Recording</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={startRecording}
-                          className="btn-primary flex items-center justify-center gap-2 mx-auto"
-                        >
-                          <Mic size={18} />
-                          <span>Start Recording</span>
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="bg-dark-900 rounded-lg p-4">
-                      <div className="flex items-center gap-3">
-                        <audio src={audioUrl} controls className="flex-1" />
-                        <button
-                          onClick={deleteRecording}
-                          className="p-2 bg-red-500 rounded-lg hover:bg-red-600"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-                      <p className="text-sm text-green-400 mt-2">✓ Recording saved ({formatTime(recordingTime)})</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Notes (Optional)
-                  </label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Add any notes about the meeting..."
-                    rows={4}
-                    className="input w-full"
-                  />
-                </div>
-
-                {/* Conversation */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Conversation Summary (Optional)
-                  </label>
-                  <textarea
-                    value={formData.conversation}
-                    onChange={(e) => setFormData({ ...formData, conversation: e.target.value })}
-                    placeholder="Summarize the key points discussed..."
-                    rows={4}
-                    className="input w-full"
-                  />
                 </div>
               </div>
             )}

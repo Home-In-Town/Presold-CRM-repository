@@ -10,7 +10,6 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import CheckInOutButton from '../components/CheckInOutButton';
 import UserLocationMap from '../components/UserLocationMap';
 
 const fadeUp = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
@@ -130,7 +129,7 @@ export default function Dashboard() {
 
   return (
     <>
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       {/* Welcome */}
       <motion.div {...fadeUp} className="flex items-center justify-between">
         <div>
@@ -142,32 +141,12 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
-        <button onClick={() => navigate('/leads')} className="btn-primary flex items-center gap-2 hidden sm:flex">
-          <Plus size={16} /> Add Lead
-        </button>
+        {user?.role !== 'SALES_EXECUTIVE' && (
+          <button onClick={() => navigate('/leads')} className="btn-primary flex items-center gap-2 hidden sm:flex">
+            <Plus size={16} /> Add Lead
+          </button>
+        )}
       </motion.div>
-
-      {user?.role === 'SALES_EXECUTIVE' && (
-        <motion.div {...fadeUp} transition={{ delay: 0.1 }} className="glass-card p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-white">Attendance</h3>
-              <p className="text-xs text-gray-500 mt-1">
-                {attendance?.checkedOutAt ? 'You are currently checked out.' : attendance ? 'You are currently checked in.' : 'No attendance recorded today.'}
-              </p>
-            </div>
-            <button onClick={toggleAttendance} disabled={attendanceLoading} className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${attendance?.checkedOutAt || !attendance ? 'bg-brand-500 text-white hover:bg-brand-400' : 'bg-gray-600 text-gray-200 hover:bg-gray-500'}`}>
-              {attendanceLoading ? 'Please wait...' : attendance?.checkedOutAt || !attendance ? 'Check In' : 'Check Out'}
-            </button>
-          </div>
-          {attendance && (
-            <div className="mt-3 text-[11px] text-gray-400">
-              <p>Checked in: {new Date(attendance.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-              {attendance.checkedOutAt && <p>Checked out: {new Date(attendance.checkedOutAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
-            </div>
-          )}
-        </motion.div>
-      )}
 
       {/* Mobile Quick Access Shortcuts - For regular users: above the map */}
       {user?.role !== 'ADMIN' && (
@@ -208,10 +187,45 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* User Location Map - For non-admin users only (TOP OF PAGE) */}
+      {/* User Location Map - For non-admin users only */}
       {user?.role !== 'ADMIN' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <UserLocationMap />
+        </motion.div>
+      )}
+
+      {/* Add Lead Button Below Map - For SALES_EXECUTIVE */}
+      {user?.role === 'SALES_EXECUTIVE' && (
+        <motion.div {...fadeUp} transition={{ delay: 0.25 }}>
+          <button
+            onClick={() => navigate('/leads')}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white font-semibold text-sm hover:from-brand-600 hover:to-brand-700 transition-all shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2"
+          >
+            <Plus size={18} />
+            Add Lead
+          </button>
+        </motion.div>
+      )}
+
+      {/* User Stats - Horizontal small cards for SALES_EXECUTIVE (below Add Lead button) */}
+      {user?.role === 'SALES_EXECUTIVE' && (
+        <motion.div {...fadeUp} transition={{ delay: 0.3 }} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="glass-card p-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Today's Leads</p>
+            <p className="text-xl font-bold text-white mt-1">{stats.todayLeads}</p>
+          </div>
+          <div className="glass-card p-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Weekly Leads</p>
+            <p className="text-xl font-bold text-white mt-1">{stats.weeklyLeads}</p>
+          </div>
+          <div className="glass-card p-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Total Pipeline</p>
+            <p className="text-xl font-bold text-white mt-1">{stats.total}</p>
+          </div>
+          <div className="glass-card p-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">My XP</p>
+            <p className="text-xl font-bold text-white mt-1">{xp}</p>
+          </div>
         </motion.div>
       )}
 
@@ -254,29 +268,31 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((card, i) => (
-          <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-            className={`stat-card group ${card.link ? 'cursor-pointer hover:ring-1 hover:ring-brand-500/30' : ''}`}
-            onClick={() => card.link && navigate(card.link)}
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br opacity-5 rounded-full -translate-y-6 translate-x-6 group-hover:opacity-10 transition-opacity" style={{ backgroundImage: `linear-gradient(to bottom right, var(--tw-gradient-from), var(--tw-gradient-to))` }} />
-            <div className="flex items-center justify-between mb-3">
-              <div className={`p-2 rounded-xl bg-gradient-to-br ${card.color} bg-opacity-10`}>
-                <card.icon size={18} className="text-white" />
+      {/* Stat Cards - Only for non-SALES_EXECUTIVE users */}
+      {user?.role !== 'SALES_EXECUTIVE' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {statCards.map((card, i) => (
+            <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
+              className={`stat-card group ${card.link ? 'cursor-pointer hover:ring-1 hover:ring-brand-500/30' : ''}`}
+              onClick={() => card.link && navigate(card.link)}
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br opacity-5 rounded-full -translate-y-6 translate-x-6 group-hover:opacity-10 transition-opacity" style={{ backgroundImage: `linear-gradient(to bottom right, var(--tw-gradient-from), var(--tw-gradient-to))` }} />
+              <div className="flex items-center justify-between mb-3">
+                <div className={`p-2 rounded-xl bg-gradient-to-br ${card.color} bg-opacity-10`}>
+                  <card.icon size={18} className="text-white" />
+                </div>
+                {card.change && (
+                  <span className="text-xs font-medium text-green-400 flex items-center gap-0.5">
+                    <ArrowUpRight size={12} /> {card.change}
+                  </span>
+                )}
               </div>
-              {card.change && (
-                <span className="text-xs font-medium text-green-400 flex items-center gap-0.5">
-                  <ArrowUpRight size={12} /> {card.change}
-                </span>
-              )}
-            </div>
-            <p className="text-2xl font-bold text-white">{card.value}</p>
-            <p className="text-xs text-gray-500 mt-1">{card.label}</p>
-          </motion.div>
-        ))}
-      </div>
+              <p className="text-2xl font-bold text-white">{card.value}</p>
+              <p className="text-xs text-gray-500 mt-1">{card.label}</p>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -457,8 +473,43 @@ export default function Dashboard() {
       </motion.div>
     </div>
 
-      {/* Check-In/Out Button (Only for non-admin users) */}
-      {user?.role !== 'ADMIN' && <CheckInOutButton />}
+    {/* Floating Check-In/Out Button - Bottom Right - For SALES_EXECUTIVE only */}
+    {user?.role === 'SALES_EXECUTIVE' && (
+      <motion.button
+        onClick={toggleAttendance}
+        disabled={attendanceLoading}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
+        whileTap={{ scale: 0.95 }}
+        className={`fixed bottom-20 right-6 z-50 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all ${
+          attendance?.checkedOutAt || !attendance
+            ? 'bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/40'
+            : 'bg-gradient-to-br from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 shadow-gray-500/40'
+        }`}
+      >
+        <CheckCircle2 size={28} className="text-white" />
+      </motion.button>
+    )}
+
+    {/* Attendance Status Tooltip - Shows on hover near FAB */}
+    {user?.role === 'SALES_EXECUTIVE' && attendance && (
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.7 }}
+        className="fixed bottom-24 right-24 z-40 hidden lg:block"
+      >
+        <div className="glass-card px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
+          <p className="font-semibold text-white text-[10px] mb-1">
+            {attendance?.checkedOutAt ? 'Checked Out' : 'Checked In'}
+          </p>
+          <p className="text-[9px]">
+            {new Date(attendance.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        </div>
+      </motion.div>
+    )}
     </>
   );
 }

@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, AlertCircle, CheckCircle, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Geolocation } from '@capacitor/geolocation';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function UserLocationMap() {
-  const [locationPermission, setLocationPermission] = useState('prompt'); // 'granted', 'denied', 'prompt'
+  const [locationPermission, setLocationPermission] = useState(() => {
+    // Restore permission from localStorage
+    return localStorage.getItem('locationPermission') || 'prompt';
+  });
   const [currentLocation, setCurrentLocation] = useState(null);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [routeHistory, setRouteHistory] = useState([]);
@@ -18,14 +22,26 @@ export default function UserLocationMap() {
   const waypointMarkersRef = useRef([]);
   const routePolylineRef = useRef(null);
   const watchIdRef = useRef(null);
+  const backgroundTrackingInterval = useRef(null);
 
   useEffect(() => {
     checkLocationPermission();
     checkCheckInStatus();
+    
+    // Start background tracking if already checked in and has permission
+    const savedPermission = localStorage.getItem('locationPermission');
+    if (savedPermission === 'granted') {
+      startBackgroundLocationTracking();
+    }
+    
     return () => {
       // Cleanup location watch
       if (watchIdRef.current) {
         navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+      // Cleanup background tracking
+      if (backgroundTrackingInterval.current) {
+        clearInterval(backgroundTrackingInterval.current);
       }
     };
   }, []);
@@ -67,28 +83,37 @@ export default function UserLocationMap() {
   const checkLocationPermission = async () => {
     setLoading(true);
     try {
-      if ('permissions' in navigator) {
-        const result = await navigator.permissions.query({ name: 'geolocation' });
-        setLocationPermission(result.state);
-        
-        result.addEventListener('change', () => {
-          setLocationPermission(result.state);
-        });
-
-        if (result.state === 'granted') {
-          startLocationTracking();
-        }
+      // Check Capacitor permission first (for mobile)
+      const permission = await Geolocation.checkPermissions();
+      console.log('Location permission:', permission.location);
+      
+      if (permission.location === 'granted') {
+        setLocationPermission('granted');
+        localStorage.setItem('locationPermission', 'granted');
+        startLocationTracking();
+        startBackgroundLocationTracking();
+      } else if (permission.location === 'denied') {
+        setLocationPermission('denied');
+        localStorage.setItem('locationPermission', 'denied');
       } else {
-        // Fallback for browsers that don't support permissions API
-        try {
-          const position = await getCurrentPosition();
-          setLocationPermission('granted');
-          setCurrentLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
+        // Check browser permissions API for web
+        if ('permissions' in navigator) {
+          const result = await navigator.permissions.query({ name: 'geolocation' });
+          setLocationPermission(result.state);
+          localStorage.setItem('locationPermission', result.state);
+          
+          result.addEventListener('change', () => {
+            setLocationPermission(result.state);
+            localStorage.setItem('locationPermission', result.state);
+            if (result.state === 'granted') {
+              startBackgroundLocationTracking();
+            }
           });
-        } catch (err) {
-          setLocationPermission('denied');
+
+          if (result.state === 'granted') {
+            startLocationTracking();
+            startBackgroundLocationTracking();
+          }
         }
       }
     } catch (err) {
@@ -168,19 +193,73 @@ export default function UserLocationMap() {
 
   const requestLocationPermission = async () => {
     try {
-      const position = await getCurrentPosition();
-      setLocationPermission('granted');
-      setCurrentLocation({
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      });
-      toast.success('Location access granted!');
-      startLocationTracking();
-      initializeMap();
+      // Request permission using Capacitor for mobile
+      const permission = await Geolocation.requestPermissions();
+      
+      if (permission.location === 'granted') {
+        setLocationPermission('granted');
+        localStorage.setItem('locationPermission', 'granted');
+        
+        // Get current position
+        const position = await Geolocation.getCurrentPosition();
+        setCurrentLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        
+        toast.success('Location access granted!');
+        startLocationTracking();
+        startBackgroundLocationTracking();
+        initializeMap();
+      } else {
+        setLocationPermission('denied');
+        localStorage.setItem('locationPermission', 'denied');
+        toast.error('Location access denied. Please enable location in settings.');
+      }
     } catch (err) {
+      console.error('Permission request failed:', err);
       setLocationPermission('denied');
-      toast.error('Location access denied. Please enable location in your browser settings.');
+      toast.error('Location access denied. Please enable location in your settings.');
     }
+  };
+
+  const startBackgroundLocationTracking = () => {
+    // Clear existing interval
+    if (backgroundTrackingInterval.current) {
+      clearInterval(backgroundTrackingInterval.current);
+    }
+
+    // Send location every 30 minutes (1800000 ms)
+    backgroundTrackingInterval.current = setInterval(async () => {
+      try {
+        console.log('📍 Background location update (30 min interval)');
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 30000,
+          maximumAge: 0
+        });
+
+        const location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+
+        // Send to backend if user is checked in
+        const statusRes = await api.get('/attendance/status');
+        if (statusRes.data.isCheckedIn) {
+          await api.post('/attendance/location-ping', {
+            lat: location.lat,
+            lng: location.lng,
+            timestamp: new Date().toISOString()
+          });
+          console.log('✅ Location sent to backend');
+        }
+      } catch (err) {
+        console.error('Background location tracking failed:', err);
+      }
+    }, 1800000); // 30 minutes
+
+    console.log('🌍 Background location tracking started (30 min intervals)');
   };
 
   const startLocationTracking = () => {

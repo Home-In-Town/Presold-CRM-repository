@@ -282,7 +282,11 @@ export default function Leads() {
 }
 
 function AddLeadModal({ onClose, onAdded }) {
-  const [form, setForm] = useState({ fullName: '', phone: '', email: '', company: '', location: '', locationLink: '', budget: '', source: 'INSTAGRAM_DM', leadType: 'INDIVIDUAL', temperature: 'WARM', priority: 'MEDIUM', adsRunning: false, notes: '' });
+  const [form, setForm] = useState({ 
+    fullName: '', phone: '', email: '', company: '', location: '', locationLink: '',
+    leadType: 'INDIVIDUAL', temperature: 'WARM', notes: '',
+    latitude: null, longitude: null
+  });
   const [loading, setLoading] = useState(false);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
@@ -292,6 +296,30 @@ function AddLeadModal({ onClose, onAdded }) {
     if (!file) return;
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
+  };
+
+  const handleCaptureLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser');
+      return;
+    }
+
+    toast.loading('Getting location...');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setForm(prev => ({
+          ...prev,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        }));
+        toast.dismiss();
+        toast.success('Location captured!');
+      },
+      (error) => {
+        toast.dismiss();
+        toast.error('Failed to get location: ' + error.message);
+      }
+    );
   };
 
   const handleSubmit = async (e) => {
@@ -337,37 +365,32 @@ function AddLeadModal({ onClose, onAdded }) {
             <input type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="input-field text-sm" />
             <input type="text" placeholder="Company" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} className="input-field text-sm" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <input type="text" placeholder="Location" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="input-field text-sm" />
-            <input type="text" placeholder="Budget" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} className="input-field text-sm" />
-          </div>
+          <input type="text" placeholder="Location" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="input-field text-sm w-full" />
           <input type="url" placeholder="Google Maps location link" value={form.locationLink} onChange={e => setForm({ ...form, locationLink: e.target.value })} className="input-field text-sm w-full" />
+          
+          {/* Location Capture Button */}
+          <button
+            type="button"
+            onClick={handleCaptureLocation}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-dark-700/50 border border-white/10 text-sm text-gray-300 hover:bg-dark-700 hover:border-brand-500/30 transition-colors"
+          >
+            <MapPin size={16} className="text-brand-400" />
+            <span>
+              {form.latitude && form.longitude
+                ? `Location Captured (${form.latitude.toFixed(6)}, ${form.longitude.toFixed(6)})`
+                : 'Capture Current Location'}
+            </span>
+          </button>
+
           <div className="grid grid-cols-2 gap-3">
             <select value={form.leadType} onChange={e => setForm({ ...form, leadType: e.target.value })} className="input-field text-sm">
               {LEAD_TYPES.map(type => <option key={type} value={type}>{type.replace('_', ' ')}</option>)}
             </select>
-            <select value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} className="input-field text-sm">
-              {SOURCES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-            </select>
             <select value={form.temperature} onChange={e => setForm({ ...form, temperature: e.target.value })} className="input-field text-sm">
               {TEMPS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} className="input-field text-sm">
-              {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
           </div>
-          <label className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-dark-700/50 border border-white/5 cursor-pointer hover:border-brand-500/20 transition-colors">
-            <input
-              type="checkbox"
-              checked={form.adsRunning}
-              onChange={e => setForm({ ...form, adsRunning: e.target.checked })}
-              className="w-4 h-4 rounded border-gray-600 bg-dark-800 text-brand-500 focus:ring-brand-500"
-            />
-            <span className="text-sm text-gray-300">Ads Running</span>
-            <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${form.adsRunning ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-500'}`}>
-              {form.adsRunning ? 'YES' : 'NO'}
-            </span>
-          </label>
+          
           <textarea placeholder="Notes" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="input-field text-sm resize-none h-20" />
 
           {/* Photo upload — shown on the lead's task card */}

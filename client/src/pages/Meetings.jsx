@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import api, { resolveFileUrl } from '../services/api';
 import toast from 'react-hot-toast';
 import AddMeetingModal from '../components/AddMeetingModal';
+import MediaViewer from '../components/MediaViewer';
 
 export default function Meetings() {
   const { user } = useAuth();
@@ -14,6 +15,7 @@ export default function Meetings() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [expandedMeetingId, setExpandedMeetingId] = useState(null);
+  const [mediaViewer, setMediaViewer] = useState(null);
 
   useEffect(() => {
     loadMeetings();
@@ -305,11 +307,25 @@ export default function Meetings() {
                         <img
                           src={resolveFileUrl(meeting.selfieUrl)}
                           alt="Meeting selfie"
-                          className="w-16 h-16 rounded-lg object-cover border border-white/10"
+                          className="w-16 h-16 rounded-lg object-cover border border-white/10 cursor-pointer hover:ring-2 hover:ring-brand-500 transition-all"
+                          onClick={() => setMediaViewer({
+                            url: meeting.selfieUrl,
+                            type: 'image',
+                            title: 'Meeting Selfie',
+                            addedBy: meeting.user
+                          })}
                         />
                       </div>
                     )}
                   </div>
+
+                  {/* Added By User Info */}
+                  {meeting.user && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                      <User size={12} />
+                      <span>Added by: <span className="text-gray-400 font-medium">{meeting.user.name}</span></span>
+                    </div>
+                  )}
 
                   {/* View Details Button */}
                   <button
@@ -350,6 +366,17 @@ export default function Meetings() {
                                 ({Math.floor(meeting.audioDuration / 60)}:{(meeting.audioDuration % 60).toString().padStart(2, '0')} min)
                               </span>
                             )}
+                            <button
+                              onClick={() => setMediaViewer({
+                                url: meeting.audioUrl,
+                                type: 'audio',
+                                title: 'Meeting Audio Recording',
+                                addedBy: meeting.user
+                              })}
+                              className="ml-auto text-xs text-brand-400 hover:text-brand-300"
+                            >
+                              Open Player
+                            </button>
                           </div>
                           <audio controls className="w-full" src={resolveFileUrl(meeting.audioUrl)}>
                             Your browser does not support audio playback.
@@ -367,7 +394,13 @@ export default function Meetings() {
                           <img
                             src={resolveFileUrl(meeting.visitingCardUrl)}
                             alt="Visiting card"
-                            className="w-full max-w-md rounded-lg border border-white/10"
+                            className="w-full max-w-md rounded-lg border border-white/10 cursor-pointer hover:ring-2 hover:ring-brand-500 transition-all"
+                            onClick={() => setMediaViewer({
+                              url: meeting.visitingCardUrl,
+                              type: 'image',
+                              title: 'Visiting Card',
+                              addedBy: meeting.user
+                            })}
                           />
                         </div>
                       )}
@@ -435,6 +468,14 @@ export default function Meetings() {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onSuccess={handleMeetingSuccess}
+        />
+      )}
+
+      {/* Media Viewer */}
+      {mediaViewer && (
+        <MediaViewer
+          media={mediaViewer}
+          onClose={() => setMediaViewer(null)}
         />
       )}
     </div>
