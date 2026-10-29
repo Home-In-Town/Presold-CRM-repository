@@ -11,6 +11,8 @@ import api from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import UserLocationMap from '../components/UserLocationMap';
+import LocationTimeline from '../components/LocationTimeline';
+import QuickLeadCapture from '../components/QuickLeadCapture';
 
 const fadeUp = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
 
@@ -21,10 +23,37 @@ export default function Dashboard() {
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [xp, setXp] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState('');
+  const [locationView, setLocationView] = useState('map'); // 'map' or 'timeline'
   const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => { loadStats(); loadXp(); if (user?.role !== 'SALES_EXECUTIVE') loadSalesActivity(); if (user) loadAttendance(); }, [user]);
+
+  // Timer effect for showing elapsed time since check-in
+  useEffect(() => {
+    if (!attendance || attendance.checkedOutAt) {
+      setElapsedTime('');
+      return;
+    }
+
+    const updateElapsedTime = () => {
+      const checkedIn = new Date(attendance.checkedInAt);
+      const now = new Date();
+      const diff = Math.floor((now - checkedIn) / 1000); // seconds
+      
+      const hours = Math.floor(diff / 3600);
+      const minutes = Math.floor((diff % 3600) / 60);
+      const seconds = diff % 60;
+      
+      setElapsedTime(`${hours}h ${minutes}m ${seconds}s`);
+    };
+
+    updateElapsedTime();
+    const interval = setInterval(updateElapsedTime, 1000);
+    
+    return () => clearInterval(interval);
+  }, [attendance]);
 
   const loadXp = async () => {
     try {
@@ -58,15 +87,54 @@ export default function Dashboard() {
   const toggleAttendance = async () => {
     if (user?.role !== 'SALES_EXECUTIVE') return;
     setAttendanceLoading(true);
+    
     try {
-      const res = await api.post('/teams/attendance/toggle');
-      // Reload from the dedicated endpoint so state is always in sync
-      const me = await api.get('/teams/attendance/me');
-      setAttendance(me.data?.attendance || null);
-      toast.success(res.data?.status === 'checked_in' ? 'Checked in successfully' : 'Checked out successfully');
-    } catch {
+      // If checking in, capture location first
+      if (!attendance || attendance.checkedOutAt) {
+        // Get current location
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              // Send check-in with location
+              const res = await api.post('/teams/attendance/toggle', {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+              });
+              
+              // Reload attendance
+              const me = await api.get('/teams/attendance/me');
+              setAttendance(me.data?.attendance || null);
+              toast.success('Checked in successfully with location! 📍');
+              setAttendanceLoading(false);
+            },
+            async (error) => {
+              // Location failed, but still check in
+              console.error('Location error:', error);
+              const res = await api.post('/teams/attendance/toggle');
+              const me = await api.get('/teams/attendance/me');
+              setAttendance(me.data?.attendance || null);
+              toast.success('Checked in (location unavailable)');
+              setAttendanceLoading(false);
+            }
+          );
+        } else {
+          // No geolocation support, just check in
+          const res = await api.post('/teams/attendance/toggle');
+          const me = await api.get('/teams/attendance/me');
+          setAttendance(me.data?.attendance || null);
+          toast.success('Checked in successfully');
+          setAttendanceLoading(false);
+        }
+      } else {
+        // Checking out - no location needed
+        const res = await api.post('/teams/attendance/toggle');
+        const me = await api.get('/teams/attendance/me');
+        setAttendance(me.data?.attendance || null);
+        toast.success('Checked out successfully');
+        setAttendanceLoading(false);
+      }
+    } catch (error) {
       toast.error('Unable to update attendance');
-    } finally {
       setAttendanceLoading(false);
     }
   };
@@ -155,6 +223,13 @@ export default function Dashboard() {
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Quick Access</h3>
             <div className="grid grid-cols-4 gap-2">
               <button
+                onClick={() => navigate('/leads?action=add')}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 transition-all shadow-lg shadow-brand-500/20"
+              >
+                <Plus size={20} className="text-white" />
+                <span className="text-[10px] font-bold text-white">Add Lead</span>
+              </button>
+              <button
                 onClick={() => navigate('/pipeline')}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
               >
@@ -175,22 +250,40 @@ export default function Dashboard() {
                 <BarChart3 size={20} className="text-green-400" />
                 <span className="text-[10px] font-medium text-gray-300">Reports</span>
               </button>
-              <button
-                onClick={() => navigate('/assets')}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
-              >
-                <Library size={20} className="text-amber-400" />
-                <span className="text-[10px] font-medium text-gray-300">Library</span>
-              </button>
             </div>
           </div>
         </motion.div>
       )}
 
-      {/* User Location Map - For non-admin users only */}
+      {/* User Location Map/Timeline - For non-admin users only */}
       {user?.role !== 'ADMIN' && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <UserLocationMap />
+          {/* Tab Selector */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setLocationView('map')}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                locationView === 'map'
+                  ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
+                  : 'bg-dark-700/50 text-gray-400 hover:text-gray-200 hover:bg-dark-700'
+              }`}
+            >
+              🗺️ Live Map
+            </button>
+            <button
+              onClick={() => setLocationView('timeline')}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                locationView === 'timeline'
+                  ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
+                  : 'bg-dark-700/50 text-gray-400 hover:text-gray-200 hover:bg-dark-700'
+              }`}
+            >
+              📍 Timeline
+            </button>
+          </div>
+
+          {/* Content */}
+          {locationView === 'map' ? <UserLocationMap /> : <LocationTimeline date={new Date().toISOString().split('T')[0]} />}
         </motion.div>
       )}
 
@@ -243,7 +336,7 @@ export default function Dashboard() {
                 <span className="text-[10px] font-medium text-gray-300">Attendance</span>
               </button>
               <button
-                onClick={() => navigate('/admin/location-monitor')}
+                onClick={() => navigate('/location-monitor')}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
               >
                 <Activity size={20} className="text-blue-400" />
@@ -475,41 +568,63 @@ export default function Dashboard() {
 
     {/* Floating Check-In/Out Button - Bottom Right - For SALES_EXECUTIVE only */}
     {user?.role === 'SALES_EXECUTIVE' && (
-      <motion.button
-        onClick={toggleAttendance}
-        disabled={attendanceLoading}
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
-        whileTap={{ scale: 0.95 }}
-        className={`fixed bottom-20 right-6 z-50 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all ${
-          attendance?.checkedOutAt || !attendance
-            ? 'bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/40'
-            : 'bg-gradient-to-br from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 shadow-gray-500/40'
-        }`}
-      >
-        <CheckCircle2 size={28} className="text-white" />
-      </motion.button>
+      <>
+        <motion.button
+          onClick={toggleAttendance}
+          disabled={attendanceLoading}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
+          whileTap={{ scale: 0.95 }}
+          className={`fixed bottom-20 right-6 z-50 rounded-full shadow-2xl flex flex-col items-center justify-center transition-all ${
+            attendance?.checkedOutAt || !attendance
+              ? 'w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/40'
+              : 'w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/50'
+          }`}
+        >
+          {attendanceLoading ? (
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <>
+              <CheckCircle2 size={attendance && !attendance.checkedOutAt ? 24 : 28} className="text-white" />
+              {attendance && !attendance.checkedOutAt && elapsedTime && (
+                <span className="text-[9px] text-white font-semibold mt-0.5 leading-none">
+                  {elapsedTime.split(' ')[0]} {elapsedTime.split(' ')[1]}
+                </span>
+              )}
+            </>
+          )}
+        </motion.button>
+
+        {/* Attendance Status Tooltip - Shows status */}
+        {attendance && !attendance.checkedOutAt && (
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.7 }}
+            className="fixed bottom-24 right-28 z-40 hidden lg:block"
+          >
+            <div className="glass-card px-3 py-2 text-xs">
+              <p className="font-semibold text-green-400 text-[10px] mb-1 flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                Checked In
+              </p>
+              <p className="text-[9px] text-gray-400">
+                {new Date(attendance.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+              {elapsedTime && (
+                <p className="text-[9px] text-gray-500 mt-1">
+                  {elapsedTime}
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </>
     )}
 
-    {/* Attendance Status Tooltip - Shows on hover near FAB */}
-    {user?.role === 'SALES_EXECUTIVE' && attendance && (
-      <motion.div
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.7 }}
-        className="fixed bottom-24 right-24 z-40 hidden lg:block"
-      >
-        <div className="glass-card px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
-          <p className="font-semibold text-white text-[10px] mb-1">
-            {attendance?.checkedOutAt ? 'Checked Out' : 'Checked In'}
-          </p>
-          <p className="text-[9px]">
-            {new Date(attendance.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </p>
-        </div>
-      </motion.div>
-    )}
+    {/* Quick Lead Capture - For all users except ADMIN */}
+    {user?.role !== 'ADMIN' && <QuickLeadCapture />}
     </>
   );
 }

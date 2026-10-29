@@ -814,19 +814,45 @@ function LeadCard({ lead, userPos, currentUser, onOpenDetail }) {
   const tasks    = lead.tasks || [];
   const photoUrl = lead.files?.[0]?.url ? resolveFileUrl(lead.files[0].url) : null;
   const ft       = currentUser?.functionalTeam || 'ALL';
+  
+  // Check if this is a research data lead
+  const isResearchLead = (() => {
+    if (!lead.tags) return false;
+    // If tags is already an array
+    if (Array.isArray(lead.tags)) {
+      return lead.tags.includes('research-data');
+    }
+    // If tags is a JSON string
+    if (typeof lead.tags === 'string') {
+      try {
+        const parsed = JSON.parse(lead.tags);
+        if (Array.isArray(parsed)) {
+          return parsed.includes('research-data');
+        }
+      } catch (e) {
+        // Fallback: check if string contains 'research-data'
+        return lead.tags.includes('research-data');
+      }
+    }
+    return false;
+  })();
 
   const claimableTasks = tasks.filter(t => !t.userId && canClaimTask(ft, currentUser?.role, t.taskTeam));
   const allClaimed     = tasks.length > 0 && tasks.every(t => !!t.userId);
 
   return (
-    <div className="glass-card overflow-hidden w-full cursor-pointer active:scale-[0.99] transition-transform"
+    <div className={`glass-card overflow-hidden w-full cursor-pointer active:scale-[0.99] transition-transform ${
+      isResearchLead ? 'ring-2 ring-pink-500/50 bg-gradient-to-br from-pink-900/20 via-dark-800 to-dark-800' : ''
+    }`}
       onClick={() => onOpenDetail(lead)}>
       <div className="flex gap-2 p-2.5">
         <div className="relative w-12 h-12 rounded-lg bg-dark-700/60 flex-shrink-0 overflow-hidden flex items-center justify-center">
           {photoUrl
             ? <img src={photoUrl} alt={lead.fullName} className="w-full h-full object-cover" />
             : <span className="text-base font-bold text-brand-400/60">{(lead.fullName || lead.company || '?')[0]}</span>}
-          <span className="absolute top-0.5 left-0 bg-emerald-600 text-white text-[6px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r shadow leading-none">Lead</span>
+          <span className={`absolute top-0.5 left-0 ${isResearchLead ? 'bg-pink-600' : 'bg-emerald-600'} text-white text-[6px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-r shadow leading-none`}>
+            {isResearchLead ? '📋 Research' : 'Lead'}
+          </span>
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-1">
