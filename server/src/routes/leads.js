@@ -7,18 +7,18 @@ import { uploadToGridFS, deleteFromGridFS } from '../config/gridfs.js';
 
 const router = Router();
 
-// Helper function to get OpenAI client
-const getOpenAIClient = async () => {
+// Helper function to get Groq client for vision analysis
+const getGroqClient = async () => {
   const settings = await prisma.setting.findMany({
-    where: { key: { in: ['OPENAI_API_KEY'] } }
+    where: { key: { in: ['GROQ_API_KEY'] } }
   });
   const stored = settings.reduce((acc, setting) => ({ ...acc, [setting.key]: setting.value }), {});
-  const openAiApiKey = process.env.OPENAI_API_KEY || stored.OPENAI_API_KEY;
+  const groqApiKey = process.env.GROQ_API_KEY || stored.GROQ_API_KEY;
   
-  if (!openAiApiKey) return null;
+  if (!groqApiKey) return null;
 
-  const { default: OpenAI } = await import('openai');
-  return new OpenAI({ apiKey: openAiApiKey });
+  const { default: Groq } = await import('groq-sdk');
+  return new Groq({ apiKey: groqApiKey });
 };
 
 // TEST ENDPOINT - Simple lead creation to verify database works
@@ -68,23 +68,28 @@ router.post('/analyze-media', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Image data is required' });
     }
 
-    const openai = await getOpenAIClient();
-    if (!openai) {
+    const groq = await getGroqClient();
+    if (!groq) {
       return res.status(400).json({ 
-        error: 'OpenAI API key is required for image analysis. Please configure it in Settings.' 
+        error: 'Groq API key is required for image analysis. Please configure it in Settings.' 
       });
     }
 
-    // Construct image URL for OpenAI Vision API
+    console.log('Using Groq vision analysis...');
+
+    // Construct image URL for Groq Vision API
     const imageUrl = `data:image/${format || 'jpeg'};base64,${image}`;
 
-    // Call OpenAI Vision API to analyze the image
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', // Using GPT-4o-mini for vision (more cost effective)
+    // Call Groq Vision API to analyze the image
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.2-90b-vision-preview', // Groq's vision model
       messages: [
         {
-          role: 'system',
-          content: `You are an AI assistant that extracts business lead information from images. 
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `You are an AI assistant that extracts business lead information from images. 
 Extract the following information if visible:
 - Lead name (full name of person)
 - Company name
@@ -96,7 +101,7 @@ Extract the following information if visible:
 - Creative type (Static Poster, Reels/Video, Drone shot)
 - Funnel type (Lead Form, WhatsApp redirect, Landing Page)
 
-Return the data in JSON format with these keys:
+Return ONLY valid JSON in this exact format (no markdown):
 {
   "leadData": {
     "fullName": "extracted name or null",
@@ -115,13 +120,6 @@ Return the data in JSON format with these keys:
 }
 
 If information is not visible or unclear, use null. Be precise and only extract what you can clearly see.`
-        },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'Please analyze this image and extract all visible lead and advertisement information.'
             },
             {
               type: 'image_url',
@@ -132,11 +130,12 @@ If information is not visible or unclear, use null. Be precise and only extract 
           ]
         }
       ],
-      max_tokens: 500,
-      temperature: 0.3 // Lower temperature for more precise extraction
+      max_tokens: 1000,
+      temperature: 0.2 // Lower temperature for more precise extraction
     });
 
     const content = response.choices[0]?.message?.content;
+    console.log('Groq vision response:', content);
     
     // Parse the JSON response
     let extractedData;
