@@ -82,15 +82,18 @@ router.post('/analyze-media', authenticate, async (req, res) => {
 
     // Call Groq Vision API to analyze the image
     console.log('Calling Groq API with llama-3.2-11b-vision-preview...');
-    const response = await groq.chat.completions.create({
-      model: 'llama-3.2-11b-vision-preview', // Using 11b model for better stability
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `You are an AI assistant that extracts business lead information from images. 
+    
+    let response;
+    try {
+      response = await groq.chat.completions.create({
+        model: 'llama-3.2-11b-vision-preview',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `You are an AI assistant that extracts business lead information from images. 
 Extract the following information if visible:
 - Lead name (full name of person)
 - Company name
@@ -121,19 +124,49 @@ Return ONLY valid JSON in this exact format (no markdown):
 }
 
 If information is not visible or unclear, use null. Be precise and only extract what you can clearly see.`
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: imageUrl
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: imageUrl
+                }
               }
+            ]
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.2
+      });
+    } catch (apiError) {
+      console.error('Groq API error:', apiError);
+      // Try with fallback model
+      console.log('Retrying with llama-3.2-90b-vision-preview...');
+      try {
+        response = await groq.chat.completions.create({
+          model: 'llama-3.2-90b-vision-preview',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `Extract lead information from this image as JSON: {leadData: {fullName, company, phone, email, projectName, location}, researchData: {advertiserIdentity, adRunningSince, creativeType, funnelType}}`
+                },
+                {
+                  type: 'image_url',
+                  image_url: { url: imageUrl }
+                }
+              ]
             }
-          ]
-        }
-      ],
-      max_tokens: 1000,
-      temperature: 0.2 // Lower temperature for more precise extraction
-    });
+          ],
+          max_tokens: 500,
+          temperature: 0.2
+        });
+      } catch (fallbackError) {
+        console.error('Fallback model also failed:', fallbackError);
+        throw new Error('Image analysis failed. Both models unavailable: ' + fallbackError.message);
+      }
+    }
 
     const content = response.choices[0]?.message?.content;
     console.log('Groq vision response:', content);

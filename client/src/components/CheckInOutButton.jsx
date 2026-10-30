@@ -163,6 +163,19 @@ export default function CheckInOutButton() {
         accuracy: location.accuracy
       });
 
+      // Immediately send first location ping
+      try {
+        await api.post('/attendance/location-ping', {
+          lat: location.lat,
+          lng: location.lng,
+          accuracy: location.accuracy,
+          timestamp: new Date().toISOString()
+        });
+        console.log('✅ Initial location ping sent on check-in');
+      } catch (pingErr) {
+        console.error('Failed to send initial location ping:', pingErr);
+      }
+
       toast.dismiss(loadingToast);
       toast.success('Checked in successfully!');
       

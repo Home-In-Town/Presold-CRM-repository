@@ -2,18 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, AlertCircle, CheckCircle, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Geolocation } from '@capacitor/geolocation';
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
-// Register the Background Geolocation plugin
-const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
-
-import { requestBackgroundLocationPermission } from '../utils/locationPermission.jsx';
-
 const UserLocationMap = () => {
   const [locationPermission, setLocationPermission] = useState(() => {
-    // Restore permission from localStorage
     return localStorage.getItem('locationPermission') || 'prompt';
   });
   const [currentLocation, setCurrentLocation] = useState(null);
@@ -28,35 +23,31 @@ const UserLocationMap = () => {
   const waypointMarkersRef = useRef([]);
   const routePolylineRef = useRef(null);
   const watchIdRef = useRef(null);
-  const backgroundTrackingInterval = useRef(null);
 
   useEffect(() => {
     checkLocationPermission();
     checkCheckInStatus();
     
-    // Start background tracking if already checked in and has permission
-    const savedPermission = localStorage.getItem('locationPermission');
-    if (savedPermission === 'granted') {
-      startBackgroundLocationTracking();
+    // Set up app state change listener to capture location when app opens
+    if (Capacitor.isNativePlatform()) {
+      const appStateListener = App.addListener('appStateChange', async ({ isActive }) => {
+        if (isActive) {
+          console.log('📱 App opened - capturing location');
+          await captureLocationOnAppOpen();
+        }
+      });
+      
+      return () => {
+        appStateListener.remove();
+        if (watchIdRef.current) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+        }
+      };
     }
     
     return () => {
-      // Cleanup location watch
       if (watchIdRef.current) {
         navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-      // Cleanup background tracking
-      if (backgroundTrackingInterval.current) {
-        // Check if it's a watcher ID (string) or interval ID (number)
-        if (typeof backgroundTrackingInterval.current === 'string') {
-          // It's a background geolocation watcher
-          BackgroundGeolocation.removeWatcher({ id: backgroundTrackingInterval.current })
-            .then(() => console.log('Background watcher removed'))
-            .catch(err => console.error('Failed to remove watcher:', err));
-        } else {
-          // It's a regular interval
-          clearInterval(backgroundTrackingInterval.current);
-        }
       }
     };
   }, []);
@@ -101,6 +92,53 @@ const UserLocationMap = () => {
     }
   }, [currentLocation, routeHistory]);
 
+  // Capture location when app opens (if checked in)
+  const captureLocationOnAppOpen = async () => {
+    try {
+      // Check if user is checked in
+      const statusRes = await api.get('/attendance/status');
+      if (!statusRes.data.isCheckedIn) {
+        console.log('Not checked in - skipping location capture');
+        return;
+      }
+
+      console.log('✅ User is checked in - capturing location on app open');
+      
+      // Get current location
+      const position = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      });
+
+      const locationData = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log('📍 Location captured on app open:', locationData);
+
+      // Update UI
+      setCurrentLocation({
+        lat: locationData.lat,
+        lng: locationData.lng
+      });
+
+      // Send to backend
+      await api.post('/attendance/location-ping', locationData);
+      console.log('✅ Location ping sent to backend');
+
+      // Reload route to show new point
+      await loadTodayRoute();
+      
+      toast.success('📍 Location captured');
+    } catch (err) {
+      console.error('Failed to capture location on app open:', err);
+    }
+  };
+
   const checkLocationPermission = async () => {
     setLoading(true);
     try {
@@ -112,7 +150,6 @@ const UserLocationMap = () => {
         setLocationPermission('granted');
         localStorage.setItem('locationPermission', 'granted');
         startLocationTracking();
-        startBackgroundLocationTracking();
       } else if (permission.location === 'denied') {
         setLocationPermission('denied');
         localStorage.setItem('locationPermission', 'denied');
@@ -127,13 +164,12 @@ const UserLocationMap = () => {
             setLocationPermission(result.state);
             localStorage.setItem('locationPermission', result.state);
             if (result.state === 'granted') {
-              startBackgroundLocationTracking();
+              startLocationTracking();
             }
           });
 
           if (result.state === 'granted') {
             startLocationTracking();
-            startBackgroundLocationTracking();
           }
         }
       }
@@ -243,7 +279,6 @@ const UserLocationMap = () => {
         
         toast.success('Location access granted!');
         startLocationTracking();
-        startBackgroundLocationTracking();
         initializeMap();
       } else {
         setLocationPermission('denied');
@@ -257,162 +292,13 @@ const UserLocationMap = () => {
     }
   };
 
-  const startBackgroundLocationTracking = async () => {
-    // Clear existing watcher/interval
-    if (backgroundTrackingInterval.current) {
-      if (typeof backgroundTrackingInterval.current === 'string') {
-        try {
-          await BackgroundGeolocation.removeWatcher({ id: backgroundTrackingInterval.current });
-          console.log('Previous watcher removed');
-        } catch (e) {
-          console.error('Failed to remove watcher:', e);
-        }
-      } else {
-        clearInterval(backgroundTrackingInterval.current);
-      }
-      backgroundTrackingInterval.current = null;
-    }
-
-    console.log('🌍 Starting REAL background location tracking with plugin...');
-
-    // Request background location permission with proper dialog
-    const granted = await requestBackgroundLocationPermission();
-    if (!granted) {
-      console.warn('Background location permission not granted');
-      return;
-    }
-
-    // Use the Background Geolocation Plugin for TRUE background tracking
-    try {
-      const watcherId = await BackgroundGeolocation.addWatcher(
-        {
-          // DON'T request permissions again - we already did that above
-          backgroundMessage: "PreSold CRM is tracking your location to build your route",
-          backgroundTitle: "Location Tracking Active",
-          requestPermissions: false, // Changed to false - permissions already granted
-          stale: false,
-          distanceFilter: 10 // Update every 10 meters (more frequent for better tracking)
-        },
-        async function callback(location, error) {
-          if (error) {
-            console.error('❌ Background location error:', error);
-            if (error.code === 'NOT_AUTHORIZED') {
-              console.error('Permission not authorized - stopping watcher');
-            }
-            return;
-          }
-
-          if (location) {
-            console.log('📍 Background location update:', {
-              lat: location.latitude,
-              lng: location.longitude,
-              time: new Date(location.time).toISOString(),
-              appInBackground: document.hidden
-            });
-            
-            const locationData = {
-              lat: location.latitude,
-              lng: location.longitude,
-              accuracy: location.accuracy,
-              timestamp: new Date(location.time).toISOString()
-            };
-
-            // Update UI (only if app is open)
-            if (!document.hidden) {
-              setCurrentLocation({
-                lat: location.latitude,
-                lng: location.longitude
-              });
-            }
-
-            // Send to backend (works even when app is closed!)
-            try {
-              await api.post('/attendance/location-ping', locationData);
-              console.log('✅ Location ping sent (app closed:', document.hidden, ')');
-              
-              // Add to route history (only if app is open)
-              if (!document.hidden) {
-                setRouteHistory(prev => [...prev, {
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                  timestamp: locationData.timestamp,
-                  accuracy: location.accuracy
-                }]);
-              }
-            } catch (apiErr) {
-              console.error('Failed to send location ping:', apiErr);
-            }
-          }
-        }
-      );
-
-      console.log('✅ Background geolocation watcher added:', watcherId);
-      console.log('🌍 Background tracking active - will work even when app is closed');
-      
-      // Store watcher ID to remove later
-      backgroundTrackingInterval.current = watcherId;
-
-    } catch (pluginErr) {
-      console.error('❌ Background geolocation plugin error:', pluginErr);
-      console.log('Falling back to interval-based tracking');
-      
-      // Fallback to interval-based tracking (only works when app open)
-      startFallbackTracking();
-    }
-  };
-
-  // Fallback tracking using intervals (only works when app is open)
-  const startFallbackTracking = () => {
-    console.log('⚠️ Using fallback tracking (app must stay open)');
-    
-    backgroundTrackingInterval.current = setInterval(async () => {
-      try {
-        console.log('📍 Fallback location update (2 min interval)');
-        
-        const position = await Geolocation.getCurrentPosition({
-          enableHighAccuracy: true,
-          timeout: 30000,
-          maximumAge: 0
-        });
-
-        const location = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        };
-
-        setCurrentLocation(location);
-
-        const statusRes = await api.get('/attendance/status');
-        if (statusRes.data.isCheckedIn) {
-          await api.post('/attendance/location-ping', {
-            lat: location.lat,
-            lng: location.lng,
-            accuracy: location.accuracy,
-            timestamp: new Date().toISOString()
-          });
-          console.log('✅ Location sent (fallback)');
-          
-          setRouteHistory(prev => [...prev, {
-            latitude: location.lat,
-            longitude: location.lng,
-            timestamp: new Date().toISOString(),
-            accuracy: location.accuracy
-          }]);
-        }
-      } catch (err) {
-        console.error('Fallback tracking failed:', err);
-      }
-    }, 120000); // 2 minutes
-  };
-
   const startLocationTracking = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported by your browser');
       return;
     }
 
-    // Watch position for real-time updates
+    // Watch position for real-time updates when app is open
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const newLocation = {
@@ -420,15 +306,6 @@ const UserLocationMap = () => {
           lng: position.coords.longitude
         };
         setCurrentLocation(newLocation);
-
-        // Add to route history if checked in
-        if (isCheckedIn) {
-          setRouteHistory(prev => [...prev, {
-            latitude: newLocation.lat,
-            longitude: newLocation.lng,
-            timestamp: new Date().toISOString()
-          }]);
-        }
       },
       (error) => {
         console.error('Location tracking error:', error);
