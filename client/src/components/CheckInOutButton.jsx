@@ -187,7 +187,13 @@ export default function CheckInOutButton() {
     } catch (err) {
       toast.dismiss(loadingToast);
       console.error('Check-in failed:', err);
-      toast.error(err.message || 'Failed to check in. Please try again.');
+      console.error('Error response:', err.response?.data);
+      
+      // Extract error message from API response
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to check in. Please try again.';
+      toast.error(errorMessage, {
+        duration: 5000 // Show for 5 seconds
+      });
     } finally {
       setLoading(false);
     }
@@ -261,7 +267,13 @@ export default function CheckInOutButton() {
     } catch (err) {
       toast.dismiss(loadingToast);
       console.error('Check-out failed:', err);
-      toast.error(err.message || 'Failed to check out. Please try again.');
+      console.error('Error response:', err.response?.data);
+      
+      // Extract error message from API response
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to check out. Please try again.';
+      toast.error(errorMessage, {
+        duration: 5000 // Show for 5 seconds
+      });
     } finally {
       setLoading(false);
     }
