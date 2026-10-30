@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 // Register the Background Geolocation plugin
 const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
 
-import { requestBackgroundLocationPermission } from '../utils/locationPermission';
+import { requestBackgroundLocationPermission } from '../utils/locationPermission.jsx';
 
 const UserLocationMap = () => {
   const [locationPermission, setLocationPermission] = useState(() => {
@@ -871,3 +871,6 @@ const UserLocationMap = () => {
     </div>
   );
 }
+
+
+export default UserLocationMap;
