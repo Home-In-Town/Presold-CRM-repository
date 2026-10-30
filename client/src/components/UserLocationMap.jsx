@@ -93,6 +93,12 @@ const UserLocationMap = () => {
     if (googleMapRef.current && currentLocation) {
       updateMapLocation();
     }
+    
+    // Also draw route if we have route history and map is ready
+    if (googleMapRef.current && routeHistory.length > 0) {
+      console.log('🔄 Route history changed - redrawing map with', routeHistory.length, 'points');
+      drawRouteOnMap();
+    }
   }, [currentLocation, routeHistory]);
 
   const checkLocationPermission = async () => {
@@ -176,12 +182,12 @@ const UserLocationMap = () => {
         });
         
         console.log('📍 Route history loaded:', historyRes.data.locations?.length || 0, 'points');
-        setRouteHistory(historyRes.data.locations || []);
+        const locations = historyRes.data.locations || [];
+        setRouteHistory(locations);
         
-        // Trigger map redraw if already initialized
-        if (googleMapRef.current && historyRes.data.locations?.length > 0) {
-          console.log('🗺️ Drawing route on map with', historyRes.data.locations.length, 'points');
-          setTimeout(() => drawRouteOnMap(), 500); // Small delay to ensure map is ready
+        // Force map redraw even if map not initialized yet (useEffect will catch it)
+        if (locations.length > 0) {
+          console.log('🗺️ Route data ready - will draw when map initializes');
         }
       } else {
         console.log('⚠️ No check-in records found for today');
@@ -252,9 +258,19 @@ const UserLocationMap = () => {
   };
 
   const startBackgroundLocationTracking = async () => {
-    // Clear existing interval
+    // Clear existing watcher/interval
     if (backgroundTrackingInterval.current) {
-      clearInterval(backgroundTrackingInterval.current);
+      if (typeof backgroundTrackingInterval.current === 'string') {
+        try {
+          await BackgroundGeolocation.removeWatcher({ id: backgroundTrackingInterval.current });
+          console.log('Previous watcher removed');
+        } catch (e) {
+          console.error('Failed to remove watcher:', e);
+        }
+      } else {
+        clearInterval(backgroundTrackingInterval.current);
+      }
+      backgroundTrackingInterval.current = null;
     }
 
     console.log('🌍 Starting REAL background location tracking with plugin...');
@@ -263,7 +279,6 @@ const UserLocationMap = () => {
     const granted = await requestBackgroundLocationPermission();
     if (!granted) {
       console.warn('Background location permission not granted');
-      // User will see dialog with option to open settings
       return;
     }
 
@@ -271,18 +286,18 @@ const UserLocationMap = () => {
     try {
       const watcherId = await BackgroundGeolocation.addWatcher(
         {
-          // Required: Request permissions from the user
+          // DON'T request permissions again - we already did that above
           backgroundMessage: "PreSold CRM is tracking your location to build your route",
           backgroundTitle: "Location Tracking Active",
-          requestPermissions: true,
+          requestPermissions: false, // Changed to false - permissions already granted
           stale: false,
-          distanceFilter: 20 // Update every 20 meters movement (more frequent)
+          distanceFilter: 10 // Update every 10 meters (more frequent for better tracking)
         },
         async function callback(location, error) {
           if (error) {
-            console.error('Background location error:', error);
+            console.error('❌ Background location error:', error);
             if (error.code === 'NOT_AUTHORIZED') {
-              toast.error('Location permission denied. Please enable "Allow all the time" in Settings.');
+              console.error('Permission not authorized - stopping watcher');
             }
             return;
           }
@@ -312,10 +327,8 @@ const UserLocationMap = () => {
 
             // Send to backend (works even when app is closed!)
             try {
-              // Don't check status first - just send the ping
-              // The backend will associate it with today's check-in
               await api.post('/attendance/location-ping', locationData);
-              console.log('✅ Location sent to backend (app closed:', document.hidden, ')');
+              console.log('✅ Location ping sent (app closed:', document.hidden, ')');
               
               // Add to route history (only if app is open)
               if (!document.hidden) {
@@ -327,22 +340,21 @@ const UserLocationMap = () => {
                 }]);
               }
             } catch (apiErr) {
-              console.error('Failed to send location:', apiErr);
-              // Don't show toast errors when app is in background
+              console.error('Failed to send location ping:', apiErr);
             }
           }
         }
       );
 
       console.log('✅ Background geolocation watcher added:', watcherId);
-      toast.success('🌍 Background location tracking enabled! Works even when app is closed.');
+      console.log('🌍 Background tracking active - will work even when app is closed');
       
       // Store watcher ID to remove later
       backgroundTrackingInterval.current = watcherId;
 
     } catch (pluginErr) {
-      console.error('Background geolocation plugin error:', pluginErr);
-      toast.error('Failed to start background tracking: ' + pluginErr.message);
+      console.error('❌ Background geolocation plugin error:', pluginErr);
+      console.log('Falling back to interval-based tracking');
       
       // Fallback to interval-based tracking (only works when app open)
       startFallbackTracking();
