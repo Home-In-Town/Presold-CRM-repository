@@ -81,8 +81,9 @@ router.post('/analyze-media', authenticate, async (req, res) => {
     const imageUrl = `data:image/${format || 'jpeg'};base64,${image}`;
 
     // Call Groq Vision API to analyze the image
+    console.log('Calling Groq API with llama-3.2-11b-vision-preview...');
     const response = await groq.chat.completions.create({
-      model: 'llama-3.2-90b-vision-preview', // Groq's vision model
+      model: 'llama-3.2-11b-vision-preview', // Using 11b model for better stability
       messages: [
         {
           role: 'user',
@@ -163,10 +164,16 @@ If information is not visible or unclear, use null. Be precise and only extract 
     });
 
   } catch (err) {
-    console.error('Image analysis error:', err);
+    console.error('=== Image Analysis Error ===');
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    console.error('Error stack:', err.stack);
+    console.error('Error response:', err.response?.data);
+    
     res.status(500).json({ 
       error: 'Failed to analyze image',
-      message: err.message 
+      message: err.message,
+      details: err.response?.data?.error?.message || err.message
     });
   }
 });
