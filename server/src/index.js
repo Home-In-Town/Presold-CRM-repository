@@ -27,6 +27,7 @@ import meetingRoutes from './routes/meetings.js';
 import locationRoutes from './routes/location.js';
 import projectRoutes from './routes/projects.js';
 import attendanceRoutes from './routes/attendance.js';
+import workingHoursRoutes from './routes/workingHours.js';
 import { scheduleMonthlyCleanup } from './jobs/monthlyCleanup.js';
 
 const app = express();
@@ -130,6 +131,7 @@ app.use('/api/meetings', meetingRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/working-hours', workingHoursRoutes);
 
 // Health
 app.get('/api/health', async (req, res) => {
@@ -159,7 +161,7 @@ async function startServer() {
   });
 
   // Start scheduled tasks (auto checkout, auto reports)
-  const { startScheduledTasks } = require('./services/scheduledTasks');
+  const { startScheduledTasks } = await import('./services/scheduledTasks.js');
   startScheduledTasks();
 
   // Run admin bootstrap in background (non-blocking)

@@ -51,6 +51,7 @@ model User {
   createdMeetings     Meeting[]            @relation("MeetingCreator")
   createdProjects     Project[]            @relation("ProjectCreator")
   createdReports      DailyReport[]        @relation("ReportCreator")
+  createdLeads        Lead[]               @relation("LeadCreator")
 }
 
 model Session {
@@ -106,6 +107,7 @@ model Lead {
   assignedToId  String?   @db.ObjectId
   assignedTo    User?     @relation(fields: [assignedToId], references: [id])
   createdById   String?   @db.ObjectId
+  createdBy     User?     @relation("LeadCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
   teamId        String?   @db.ObjectId
   team          Team?     @relation(fields: [teamId], references: [id])
 
