@@ -158,6 +158,10 @@ async function startServer() {
     console.log(`🚀 Pre-Sold CRM server running on port ${PORT}`);
   });
 
+  // Start scheduled tasks (auto checkout, auto reports)
+  const { startScheduledTasks } = require('./services/scheduledTasks');
+  startScheduledTasks();
+
   // Run admin bootstrap in background (non-blocking)
   ensureAdminAccount().catch(err => {
     console.error('Admin bootstrap failed (non-fatal):', err.message);
