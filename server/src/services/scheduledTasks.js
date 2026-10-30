@@ -3,10 +3,9 @@
 
 import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
-import { PrismaClient as TrackingPrismaClient } from '../../node_modules/.prisma/tracking-client/index.js';
+import trackingDb from '../config/tracking-db.js';
 
 const db = new PrismaClient();
-const trackingDb = new TrackingPrismaClient();
 
 // Auto checkout at 10 PM every day
 const autoCheckout = cron.schedule('0 22 * * *', async () => {

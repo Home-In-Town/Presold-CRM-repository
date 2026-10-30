@@ -1,11 +1,10 @@
 // Working Hours API Routes
 import express from 'express';
-import { authenticate, requireAdmin } from '../middleware/auth.js';
-import { PrismaClient as TrackingPrismaClient } from '../../node_modules/.prisma/tracking-client/index.js';
+import { authenticate, authorize } from '../middleware/auth.js';
+import trackingDb from '../config/tracking-db.js';
 import { PrismaClient } from '@prisma/client';
 
 const router = express.Router();
-const trackingDb = new TrackingPrismaClient();
 const db = new PrismaClient();
 
 // GET /api/working-hours/:userId - Get working hours for a specific user
@@ -94,7 +93,7 @@ router.get('/:userId', authenticate, async (req, res) => {
 });
 
 // GET /api/working-hours/team/summary - Get working hours summary for all team members (Admin only)
-router.get('/team/summary', authenticate, requireAdmin, async (req, res) => {
+router.get('/team/summary', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
