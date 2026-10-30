@@ -438,6 +438,11 @@ router.get('/admin/all-locations', authenticate, async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    console.log('🔍 [Location Monitor Debug] Fetching check-ins for today:', {
+      today: today.toISOString(),
+      tomorrow: tomorrow.toISOString()
+    });
+
     // Get all check-ins for today
     const checkIns = await trackingDb.checkInOut.findMany({
       where: {
@@ -450,6 +455,10 @@ router.get('/admin/all-locations', authenticate, async (req, res) => {
         checkInTime: 'desc'
       }
     });
+
+    console.log(`📊 [Location Monitor Debug] Found ${checkIns.length} check-ins:`, 
+      checkIns.map(c => ({ userId: c.userId, checkInTime: c.checkInTime, status: c.status }))
+    );
 
     // Import prisma from main database to get user info
     const { default: prisma } = await import('../config/database.js');
@@ -468,6 +477,13 @@ router.get('/admin/all-locations', authenticate, async (req, res) => {
           }
         });
 
+        console.log(`👤 [Location Monitor Debug] User ${checkIn.userId}:`, {
+          found: !!user,
+          name: user?.name,
+          checkInLat: checkIn.checkInLat,
+          checkInLng: checkIn.checkInLng
+        });
+
         // Get location history
         const locationHistory = await trackingDb.locationHistory.findMany({
           where: {
@@ -481,6 +497,8 @@ router.get('/admin/all-locations', authenticate, async (req, res) => {
             timestamp: 'asc'
           }
         });
+
+        console.log(`📍 [Location Monitor Debug] User ${user?.name} has ${locationHistory.length} location pings`);
 
         return {
           userId: checkIn.userId,
@@ -510,9 +528,11 @@ router.get('/admin/all-locations', authenticate, async (req, res) => {
       })
     );
 
+    console.log(`✅ [Location Monitor Debug] Returning ${usersWithLocations.length} users to frontend`);
+
     res.json({ users: usersWithLocations });
   } catch (err) {
-    console.error('Admin all locations error:', err);
+    console.error('❌ [Location Monitor Debug] Admin all locations error:', err);
     res.status(500).json({ error: 'Failed to fetch locations' });
   }
 });
