@@ -2,18 +2,26 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   FileText, Upload, Image as ImageIcon, Video, FileIcon,
-  Save, Trash2, Download, Loader2, X, Camera, File
+  Save, Trash2, Download, Loader2, X, Camera, File, Edit
 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import { Camera as CapacitorCamera } from '@capacitor/camera';
 import { CameraResultType, CameraSource } from '@capacitor/camera';
 
-export default function ResearchLeadView({ lead, onUpdate }) {
+function ResearchLeadView({ lead, onUpdate }) {
   const [notes, setNotes] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedLead, setEditedLead] = useState({
+    fullName: lead.fullName || '',
+    company: lead.company || '',
+    location: lead.location || '',
+    phone: lead.phone || '',
+    email: lead.email || ''
+  });
 
   useEffect(() => {
     loadNotes();
@@ -23,9 +31,7 @@ export default function ResearchLeadView({ lead, onUpdate }) {
   const loadNotes = async () => {
     try {
       const res = await api.get(`/leads/${lead.id}`);
-      // Extract notes from lead notes
       if (res.data.notes && res.data.notes.length > 0) {
-        // Get the most recent note
         const latestNote = res.data.notes[0];
         setNotes(latestNote.content || '');
       }
@@ -39,7 +45,6 @@ export default function ResearchLeadView({ lead, onUpdate }) {
       const res = await api.get(`/leads/${lead.id}/attachments`);
       setAttachments(res.data || []);
     } catch (err) {
-      // Endpoint might not exist yet
       console.log('Attachments not available');
       setAttachments([]);
     }
@@ -61,6 +66,37 @@ export default function ResearchLeadView({ lead, onUpdate }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveLeadInfo = async () => {
+    setLoading(true);
+    try {
+      await api.put(`/leads/${lead.id}`, {
+        fullName: editedLead.fullName,
+        company: editedLead.company,
+        location: editedLead.location,
+        phone: editedLead.phone,
+        email: editedLead.email
+      });
+      toast.success('Lead information updated successfully');
+      setIsEditing(false);
+      if (onUpdate) onUpdate();
+    } catch (err) {
+      toast.error('Failed to update lead information');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditedLead({
+      fullName: lead.fullName || '',
+      company: lead.company || '',
+      location: lead.location || '',
+      phone: lead.phone || '',
+      email: lead.email || ''
+    });
+    setIsEditing(false);
   };
 
   const handleCameraCapture = async () => {
@@ -86,7 +122,6 @@ export default function ResearchLeadView({ lead, onUpdate }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       toast.error('File size must be less than 10MB');
       return;
@@ -102,7 +137,6 @@ export default function ResearchLeadView({ lead, onUpdate }) {
   const uploadFile = async (dataUrl, mimeType, fileName) => {
     setUploading(true);
     try {
-      // Convert data URL to blob
       const response = await fetch(dataUrl);
       const blob = await response.blob();
 
@@ -148,7 +182,6 @@ export default function ResearchLeadView({ lead, onUpdate }) {
     return `${base}${url}`;
   };
 
-  // Parse research data from lead notes
   const researchInfo = lead.notes?.[0]?.content || '';
   const parsedTags = lead.tags ? JSON.parse(lead.tags) : [];
 
@@ -165,46 +198,154 @@ export default function ResearchLeadView({ lead, onUpdate }) {
             <FileText size={24} className="text-pink-400" />
             Research Lead Information
           </h2>
-          <span className="px-3 py-1 rounded-full bg-pink-500/20 text-pink-400 text-xs font-semibold">
-            RESEARCH DATA
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-pink-500/20 text-pink-400 text-xs font-semibold">
+              RESEARCH DATA
+            </span>
+            {!isEditing && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="p-2 hover:bg-dark-700 rounded-lg transition-colors text-gray-400 hover:text-brand-400"
+                title="Edit lead information"
+              >
+                <Edit size={18} />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Lead Name</p>
-            <p className="text-sm text-white font-medium">{lead.fullName || 'N/A'}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Company</p>
-            <p className="text-sm text-white font-medium">{lead.company || 'N/A'}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Role</p>
-            <p className="text-sm text-white font-medium capitalize">
-              {parsedTags[1] || 'Unknown'}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Source</p>
-            <p className="text-sm text-white font-medium">{lead.source || 'N/A'}</p>
-          </div>
-          {lead.location && (
-            <div className="col-span-2">
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Location</p>
-              <p className="text-sm text-white font-medium">{lead.location}</p>
+        {isEditing ? (
+          <>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Lead Name</label>
+                <input
+                  type="text"
+                  value={editedLead.fullName}
+                  onChange={(e) => setEditedLead({ ...editedLead, fullName: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Enter name"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Company</label>
+                <input
+                  type="text"
+                  value={editedLead.company}
+                  onChange={(e) => setEditedLead({ ...editedLead, company: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Enter company"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Phone</label>
+                <input
+                  type="tel"
+                  value={editedLead.phone}
+                  onChange={(e) => setEditedLead({ ...editedLead, phone: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Enter phone"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Email</label>
+                <input
+                  type="email"
+                  value={editedLead.email}
+                  onChange={(e) => setEditedLead({ ...editedLead, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Enter email"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Location</label>
+                <input
+                  type="text"
+                  value={editedLead.location}
+                  onChange={(e) => setEditedLead({ ...editedLead, location: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  placeholder="Enter location"
+                />
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Research Data Details */}
-        {researchInfo && (
-          <div className="mt-4 p-4 bg-dark-700/50 rounded-lg">
-            <p className="text-xs text-gray-400 mb-2 font-semibold">📋 Research Details:</p>
-            <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
-              {researchInfo}
-            </pre>
-          </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={cancelEdit}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-300 font-medium transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveLeadInfo}
+                disabled={loading}
+                className="px-6 py-2 rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white font-medium transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Lead Name</p>
+                <p className="text-sm text-white font-medium">{lead.fullName || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Company</p>
+                <p className="text-sm text-white font-medium">{lead.company || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Role</p>
+                <p className="text-sm text-white font-medium capitalize">
+                  {parsedTags[1] || 'Unknown'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Source</p>
+                <p className="text-sm text-white font-medium">{lead.source || 'N/A'}</p>
+              </div>
+              {lead.phone && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Phone</p>
+                  <p className="text-sm text-white font-medium">{lead.phone}</p>
+                </div>
+              )}
+              {lead.email && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Email</p>
+                  <p className="text-sm text-white font-medium">{lead.email}</p>
+                </div>
+              )}
+              {lead.location && (
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Location</p>
+                  <p className="text-sm text-white font-medium">{lead.location}</p>
+                </div>
+              )}
+            </div>
+
+            {researchInfo && (
+              <div className="mt-4 p-4 bg-dark-700/50 rounded-lg">
+                <p className="text-xs text-gray-400 mb-2 font-semibold">📋 Research Details:</p>
+                <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
+                  {researchInfo}
+                </pre>
+              </div>
+            )}
+          </>
         )}
       </motion.div>
 
@@ -260,7 +401,6 @@ export default function ResearchLeadView({ lead, onUpdate }) {
           Attachments
         </h3>
 
-        {/* Upload Buttons */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           <button
             onClick={handleCameraCapture}
@@ -303,7 +443,6 @@ export default function ResearchLeadView({ lead, onUpdate }) {
           </div>
         )}
 
-        {/* Attachments List */}
         {attachments.length > 0 ? (
           <div className="space-y-2">
             {attachments.map((attachment) => (
@@ -354,3 +493,5 @@ export default function ResearchLeadView({ lead, onUpdate }) {
     </div>
   );
 }
+
+export default ResearchLeadView;

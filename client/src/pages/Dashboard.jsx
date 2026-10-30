@@ -566,8 +566,8 @@ export default function Dashboard() {
       </motion.div>
     </div>
 
-    {/* Floating Check-In/Out Button - Bottom Right - For SALES_EXECUTIVE only */}
-    {user?.role === 'SALES_EXECUTIVE' && (
+    {/* Floating Check-In/Out Button - Bottom Right - For ALL USERS except ADMIN */}
+    {user?.role !== 'ADMIN' && (
       <>
         <motion.button
           onClick={toggleAttendance}

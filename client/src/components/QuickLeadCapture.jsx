@@ -72,6 +72,10 @@ export default function QuickLeadCapture() {
   const analyzeImage = async (base64Data, format) => {
     try {
       setAnalyzing(true);
+      setError(null);
+      
+      console.log('🖼️ Sending image for analysis, format:', format);
+      console.log('📊 Image data length:', base64Data?.length || 0);
       
       // Call backend API to analyze the image
       const response = await api.post('/leads/analyze-media', {
@@ -79,12 +83,17 @@ export default function QuickLeadCapture() {
         format: format
       });
 
+      console.log('✅ Analysis response:', response.data);
       setResult(response.data);
       toast.success('Image analyzed! Review the extracted data.');
     } catch (err) {
-      console.error('Analysis error:', err);
-      toast.error('Failed to analyze image');
-      setError(err.response?.data?.error || 'Analysis failed. Please try again.');
+      console.error('❌ Analysis error:', err);
+      console.error('Error response:', err.response?.data);
+      console.error('Error status:', err.response?.status);
+      
+      const errorMessage = err.response?.data?.error || err.message || 'Analysis failed. Please try again.';
+      toast.error(`Failed: ${errorMessage}`);
+      setError(errorMessage);
     } finally {
       setAnalyzing(false);
       setLoading(false);
