@@ -83,7 +83,7 @@ export default function Reports() {
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-            {[{ key: 'calls', label: 'Calls' }, { key: 'meetings', label: 'Meetings' }, { key: 'siteVisits', label: 'Visits' }, { key: 'demos', label: 'Demos' }, { key: 'sales', label: 'Sales' }, { key: 'revenue', label: 'Revenue' }].map(f => (
+            {[{ key: 'calls', label: 'Calls' }, { key: 'meetings', label: 'Meetings' }, { key: 'siteVisits', label: 'Leads' }, { key: 'demos', label: 'Demos' }, { key: 'sales', label: 'Sales' }, { key: 'revenue', label: 'Revenue' }].map(f => (
               <label key={f.key} className="block text-[10px] text-gray-400">
                 <span className="block mb-1 text-[10px] uppercase tracking-[0.2em] text-gray-500">{f.label}</span>
                 <input

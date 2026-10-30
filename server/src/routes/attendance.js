@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.js';
-import { trackingDb } from '../config/database.js';
+import prisma, { trackingDb } from '../config/database.js';
 import { runManualCleanup } from '../jobs/monthlyCleanup.js';
 
 const router = express.Router();
@@ -78,7 +78,7 @@ router.post('/check-in', authenticate, async (req, res) => {
     // Get address from coordinates (optional - can add reverse geocoding later)
     const address = `${latitude}, ${longitude}`;
 
-    // Create check-in record
+    // Create check-in record in TRACKING database
     const checkIn = await trackingDb.checkInOut.create({
       data: {
         userId: req.user.id,
@@ -101,6 +101,20 @@ router.post('/check-in', authenticate, async (req, res) => {
         timestamp: new Date()
       }
     });
+
+    // SYNC: Also create AttendanceRecord in MAIN database (for admin visibility in Team page)
+    try {
+      await prisma.attendanceRecord.create({
+        data: {
+          userId: req.user.id,
+          checkedInAt: new Date()
+        }
+      });
+      console.log('✅ Synced attendance to main database for admin visibility');
+    } catch (syncErr) {
+      console.error('⚠️ Failed to sync to main database (non-critical):', syncErr);
+      // Don't fail the request - tracking DB is primary
+    }
 
     res.json({
       success: true,
@@ -152,7 +166,7 @@ router.post('/check-out', authenticate, async (req, res) => {
 
     const address = `${latitude}, ${longitude}`;
 
-    // Update check-in record with check-out info
+    // Update check-in record with check-out info in TRACKING database
     const updated = await trackingDb.checkInOut.update({
       where: { id: checkIn.id },
       data: {
@@ -175,6 +189,32 @@ router.post('/check-out', authenticate, async (req, res) => {
         timestamp: new Date()
       }
     });
+
+    // SYNC: Also update AttendanceRecord in MAIN database (for admin visibility)
+    try {
+      // Find today's attendance record in main DB
+      const mainDbRecord = await prisma.attendanceRecord.findFirst({
+        where: {
+          userId: req.user.id,
+          checkedInAt: {
+            gte: today,
+            lt: tomorrow
+          },
+          checkedOutAt: null
+        },
+        orderBy: { checkedInAt: 'desc' }
+      });
+
+      if (mainDbRecord) {
+        await prisma.attendanceRecord.update({
+          where: { id: mainDbRecord.id },
+          data: { checkedOutAt: new Date() }
+        });
+        console.log('✅ Synced check-out to main database');
+      }
+    } catch (syncErr) {
+      console.error('⚠️ Failed to sync check-out to main database (non-critical):', syncErr);
+    }
 
     res.json({
       success: true,

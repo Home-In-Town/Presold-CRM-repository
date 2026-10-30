@@ -21,6 +21,7 @@ const navItems = [
   { path: '/meetings', label: 'Meetings', icon: Calendar },
   { path: '/90-day-plan', label: '90-Day Plan', icon: Calendar },
   { path: '/location-monitor', label: 'Location', icon: MapPin },
+  { path: '/report-monitor', label: 'Report Monitor', icon: FileText },
   { path: '/attendance-report', label: 'Attendance', icon: ClipboardList },
   { path: '/ai', label: 'AI Assistant', icon: Bot },
   { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
@@ -103,8 +104,8 @@ export default function DashboardLayout() {
 
   // All roles just use /playbook — the PlaybookRouter in App.jsx renders the correct one
   const visibleNavItems = navItems.filter(item => {
-    // Location monitor and attendance report - admin only
-    if (item.path === '/location-monitor' || item.path === '/attendance-report') {
+    // Location monitor, report monitor, and attendance report - admin only
+    if (item.path === '/location-monitor' || item.path === '/report-monitor' || item.path === '/attendance-report') {
       return user?.role === 'ADMIN';
     }
     
@@ -114,11 +115,11 @@ export default function DashboardLayout() {
     }
     // DMA White Label team
     if (user?.role === 'DMA_WHITE_LABEL') {
-      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/projects', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
+      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
     }
     // B2B Sales team
     if (user?.role === 'B2B_SALES') {
-      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/projects', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
+      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
     }
     // Content creators
     if (user?.role === 'CONTENT_CREATION') {
@@ -126,7 +127,7 @@ export default function DashboardLayout() {
     }
     // Sales executives
     if (user?.role === 'SALES_EXECUTIVE') {
-      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/projects', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
+      return ['/dashboard', '/leads', '/pipeline', '/playbook', '/tasks', '/meetings', '/assets', '/ai', '/reports', '/90-day-plan', '/settings'].includes(item.path);
     }
     // Admin sees everything except Content (content is for CONTENT_CREATION only)
     return item.path !== '/content';

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { MapPin, Users, Navigation, Clock, RefreshCw, User, Activity, LogOut, LogIn, 
-  Target, BookOpen, BarChart3, Library } from 'lucide-react';
+  Target, BookOpen, BarChart3, Library, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import LocationTimeline from '../components/LocationTimeline';
+import AdminUserTimeline from '../components/AdminUserTimeline';
 
 export default function AdminLocationMonitor() {
   const navigate = useNavigate();
@@ -13,6 +15,7 @@ export default function AdminLocationMonitor() {
   const [mapReady, setMapReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [viewMode, setViewMode] = useState('map'); // 'map' or 'timeline'
   const mapRef = useRef(null);
   const googleMapRef = useRef(null);
   const markersRef = useRef([]);
@@ -84,6 +87,14 @@ export default function AdminLocationMonitor() {
       mounted = false;
     };
   }, []);
+
+  // Re-draw markers when view mode changes back to map
+  useEffect(() => {
+    if (viewMode === 'map' && googleMapRef.current && users.length > 0) {
+      console.log('🔄 Switching to map view, redrawing markers...');
+      updateMapMarkers();
+    }
+  }, [viewMode, users, selectedUser]);
 
   useEffect(() => {
     // Load location data AFTER map is initialized (runs in parallel)
@@ -615,75 +626,115 @@ export default function AdminLocationMonitor() {
         <div className="lg:col-span-2">
           <div className="bg-dark-800 rounded-xl border border-white/5 overflow-hidden">
             <div className="p-4 border-b border-white/5">
-              <h2 className="text-lg font-semibold text-white">
-                {selectedUser ? `${selectedUser.userName}'s Route` : 'All Team Routes'}
-              </h2>
-              <p className="text-sm text-gray-400 mt-1">
-                🟢 Check In • 🔴 Check Out • Colored lines show travel routes
-              </p>
-            </div>
-            <div className="relative">
-              <div ref={mapRef} className="h-[600px] w-full" style={{ minHeight: '600px' }} />
+              {/* Tab Selector */}
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold text-white">
+                  {selectedUser ? `${selectedUser.userName}'s Journey` : 'Team Journey'}
+                </h2>
+              </div>
               
-              {/* Loading overlay for map */}
-              {!mapReady && (
-                <div className="absolute inset-0 bg-dark-900 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-r-transparent mb-4"></div>
-                    <p className="text-sm text-gray-400">Loading map...</p>
-                    <p className="text-xs text-gray-600 mt-2">Waiting for Google Maps API</p>
-                  </div>
-                </div>
-              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                    viewMode === 'map'
+                      ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
+                      : 'bg-dark-700/50 text-gray-400 hover:text-gray-200 hover:bg-dark-700'
+                  }`}
+                >
+                  🗺️ Map View
+                </button>
+                <button
+                  onClick={() => setViewMode('timeline')}
+                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                    viewMode === 'timeline'
+                      ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
+                      : 'bg-dark-700/50 text-gray-400 hover:text-gray-200 hover:bg-dark-700'
+                  }`}
+                >
+                  📍 Timeline
+                </button>
+              </div>
               
-              {/* Color Legend Overlay */}
-              {users.length > 0 && (
-                <div className="absolute top-4 right-4 bg-dark-900/95 backdrop-blur-sm rounded-lg border border-white/10 p-3 max-w-xs">
-                  <h4 className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
-                    <MapPin size={12} className="text-brand-400" />
-                    User Routes
-                  </h4>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {users.map((user, index) => {
-                      const colors = [
-                        '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6', 
-                        '#EF4444', '#14B8A6', '#F97316', '#8B5CF6', '#84CC16'
-                      ];
-                      const color = colors[index % colors.length];
-                      const isSelected = selectedUser?.userId === user.userId;
-                      
-                      return (
-                        <button
-                          key={user.userId}
-                          onClick={() => setSelectedUser(user)}
-                          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors ${
-                            isSelected ? 'bg-white/10' : 'hover:bg-white/5'
-                          }`}
-                        >
-                          <div 
-                            className="w-3 h-3 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: color }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-white truncate">{user.userName}</p>
-                            <p className="text-[10px] text-gray-400">
-                              {user.locationHistory?.length || 0} points
-                            </p>
-                          </div>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            user.status === 'CHECKED_IN' 
-                              ? 'bg-green-500/20 text-green-400' 
-                              : 'bg-gray-500/20 text-gray-400'
-                          }`}>
-                            {user.status === 'CHECKED_IN' ? 'Active' : 'Done'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+              {viewMode === 'map' && (
+                <p className="text-sm text-gray-400 mt-3">
+                  🟢 Check In • 🔴 Check Out • Colored lines show travel routes
+                </p>
               )}
             </div>
+            
+            {viewMode === 'map' ? (
+              <div className="relative">
+                <div ref={mapRef} className="h-[600px] w-full" style={{ minHeight: '600px' }} />
+                
+                {/* Loading overlay for map */}
+                {!mapReady && (
+                  <div className="absolute inset-0 bg-dark-900 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-r-transparent mb-4"></div>
+                      <p className="text-sm text-gray-400">Loading map...</p>
+                      <p className="text-xs text-gray-600 mt-2">Waiting for Google Maps API</p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Color Legend Overlay */}
+                {users.length > 0 && (
+                  <div className="absolute top-4 right-4 bg-dark-900/95 backdrop-blur-sm rounded-lg border border-white/10 p-3 max-w-xs">
+                    <h4 className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
+                      <MapPin size={12} className="text-brand-400" />
+                      User Routes
+                    </h4>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {users.map((user, index) => {
+                        const colors = [
+                          '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6', 
+                          '#EF4444', '#14B8A6', '#F97316', '#8B5CF6', '#84CC16'
+                        ];
+                        const color = colors[index % colors.length];
+                        const isSelected = selectedUser?.userId === user.userId;
+                        
+                        return (
+                          <button
+                            key={user.userId}
+                            onClick={() => setSelectedUser(user)}
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors ${
+                              isSelected ? 'bg-white/10' : 'hover:bg-white/5'
+                            }`}
+                          >
+                            <div 
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: color }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-white truncate">{user.userName}</p>
+                              <p className="text-[10px] text-gray-400">
+                                {user.locationHistory?.length || 0} points
+                              </p>
+                            </div>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                              user.status === 'CHECKED_IN' 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : 'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {user.status === 'CHECKED_IN' ? 'Active' : 'Done'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4">
+                {/* Keep map mounted but hidden to preserve state */}
+                <div className="hidden">
+                  <div ref={mapRef} className="h-[600px] w-full" />
+                </div>
+                <AdminUserTimeline userData={selectedUser} />
+              </div>
+            )}
           </div>
         </div>
       </div>

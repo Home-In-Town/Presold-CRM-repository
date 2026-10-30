@@ -3,6 +3,7 @@ import { X, Camera, Upload, MapPin, Mic, Square, Play, Pause, User, Phone, Build
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
 import toast from 'react-hot-toast';
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -137,30 +138,22 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
-  // Audio recording functions
+  // Audio recording functions using native Capacitor plugin
   const startRecording = async () => {
     try {
-      // Request microphone permission explicitly
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Check and request permission
+      const hasPermission = await VoiceRecorder.hasAudioRecordingPermission();
       
-      // Permission granted, proceed with recording
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
+      if (!hasPermission.value) {
+        const permissionResult = await VoiceRecorder.requestAudioRecordingPermission();
+        if (!permissionResult.value) {
+          toast.error('Microphone permission denied. Please allow microphone access in your device settings.');
+          return;
         }
-      };
+      }
 
-      mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        setAudioUrl(URL.createObjectURL(blob));
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorderRef.current.start();
+      // Start recording
+      await VoiceRecorder.startRecording();
       setIsRecording(true);
       setRecordingTime(0);
       
@@ -170,24 +163,46 @@ export default function AddMeetingModal({ isOpen, onClose, onSuccess }) {
 
       toast.success('Recording started');
     } catch (err) {
-      // Permission denied or error
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        toast.error('Microphone permission denied. Please allow microphone access in your browser settings.');
-      } else {
-        toast.error('Failed to start recording: ' + err.message);
-      }
       console.error('Recording error:', err);
+      toast.error('Failed to start recording: ' + err.message);
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+  const stopRecording = async () => {
+    if (!isRecording) return;
+    
+    try {
+      const result = await VoiceRecorder.stopRecording();
+      setIsRecording(false);
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+
+      // Convert base64 to blob
+      const base64Sound = result.value.recordDataBase64;
+      const mimeType = result.value.mimeType || 'audio/aac';
+      
+      // Convert base64 to blob
+      const byteCharacters = atob(base64Sound);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType });
+      
+      setAudioBlob(blob);
+      setAudioUrl(URL.createObjectURL(blob));
+      
+      toast.success('Recording stopped');
+    } catch (err) {
+      console.error('Stop recording error:', err);
+      toast.error('Failed to stop recording');
       setIsRecording(false);
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      toast.success('Recording stopped');
     }
   };
 

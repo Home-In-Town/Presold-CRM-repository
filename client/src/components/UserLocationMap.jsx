@@ -2,10 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, AlertCircle, CheckCircle, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
-export default function UserLocationMap() {
+// Register the Background Geolocation plugin
+const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
+
+import { requestBackgroundLocationPermission } from '../utils/locationPermission';
+
+const UserLocationMap = () => {
   const [locationPermission, setLocationPermission] = useState(() => {
     // Restore permission from localStorage
     return localStorage.getItem('locationPermission') || 'prompt';
@@ -41,7 +47,16 @@ export default function UserLocationMap() {
       }
       // Cleanup background tracking
       if (backgroundTrackingInterval.current) {
-        clearInterval(backgroundTrackingInterval.current);
+        // Check if it's a watcher ID (string) or interval ID (number)
+        if (typeof backgroundTrackingInterval.current === 'string') {
+          // It's a background geolocation watcher
+          BackgroundGeolocation.removeWatcher({ id: backgroundTrackingInterval.current })
+            .then(() => console.log('Background watcher removed'))
+            .catch(err => console.error('Failed to remove watcher:', err));
+        } else {
+          // It's a regular interval
+          clearInterval(backgroundTrackingInterval.current);
+        }
       }
     };
   }, []);
@@ -146,17 +161,30 @@ export default function UserLocationMap() {
         }
       });
       
+      console.log('📅 Today\'s check-in records:', res.data.records);
+      
       const todayRecords = res.data.records || [];
       if (todayRecords.length > 0) {
         // Get location history for today's check-in
         const todayCheckIn = todayRecords[0];
+        console.log('🔍 Loading route for check-in:', todayCheckIn.id);
+        
         const historyRes = await api.get(`/attendance/route-history`, {
           params: {
             checkInId: todayCheckIn.id
           }
         });
         
+        console.log('📍 Route history loaded:', historyRes.data.locations?.length || 0, 'points');
         setRouteHistory(historyRes.data.locations || []);
+        
+        // Trigger map redraw if already initialized
+        if (googleMapRef.current && historyRes.data.locations?.length > 0) {
+          console.log('🗺️ Drawing route on map with', historyRes.data.locations.length, 'points');
+          setTimeout(() => drawRouteOnMap(), 500); // Small delay to ensure map is ready
+        }
+      } else {
+        console.log('⚠️ No check-in records found for today');
       }
     } catch (err) {
       console.error('Failed to load route:', err);
@@ -223,16 +251,112 @@ export default function UserLocationMap() {
     }
   };
 
-  const startBackgroundLocationTracking = () => {
+  const startBackgroundLocationTracking = async () => {
     // Clear existing interval
     if (backgroundTrackingInterval.current) {
       clearInterval(backgroundTrackingInterval.current);
     }
 
-    // Send location every 30 minutes (1800000 ms)
+    console.log('🌍 Starting REAL background location tracking with plugin...');
+
+    // Request background location permission with proper dialog
+    const granted = await requestBackgroundLocationPermission();
+    if (!granted) {
+      console.warn('Background location permission not granted');
+      // User will see dialog with option to open settings
+      return;
+    }
+
+    // Use the Background Geolocation Plugin for TRUE background tracking
+    try {
+      const watcherId = await BackgroundGeolocation.addWatcher(
+        {
+          // Required: Request permissions from the user
+          backgroundMessage: "PreSold CRM is tracking your location to build your route",
+          backgroundTitle: "Location Tracking Active",
+          requestPermissions: true,
+          stale: false,
+          distanceFilter: 20 // Update every 20 meters movement (more frequent)
+        },
+        async function callback(location, error) {
+          if (error) {
+            console.error('Background location error:', error);
+            if (error.code === 'NOT_AUTHORIZED') {
+              toast.error('Location permission denied. Please enable "Allow all the time" in Settings.');
+            }
+            return;
+          }
+
+          if (location) {
+            console.log('📍 Background location update:', {
+              lat: location.latitude,
+              lng: location.longitude,
+              time: new Date(location.time).toISOString(),
+              appInBackground: document.hidden
+            });
+            
+            const locationData = {
+              lat: location.latitude,
+              lng: location.longitude,
+              accuracy: location.accuracy,
+              timestamp: new Date(location.time).toISOString()
+            };
+
+            // Update UI (only if app is open)
+            if (!document.hidden) {
+              setCurrentLocation({
+                lat: location.latitude,
+                lng: location.longitude
+              });
+            }
+
+            // Send to backend (works even when app is closed!)
+            try {
+              // Don't check status first - just send the ping
+              // The backend will associate it with today's check-in
+              await api.post('/attendance/location-ping', locationData);
+              console.log('✅ Location sent to backend (app closed:', document.hidden, ')');
+              
+              // Add to route history (only if app is open)
+              if (!document.hidden) {
+                setRouteHistory(prev => [...prev, {
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  timestamp: locationData.timestamp,
+                  accuracy: location.accuracy
+                }]);
+              }
+            } catch (apiErr) {
+              console.error('Failed to send location:', apiErr);
+              // Don't show toast errors when app is in background
+            }
+          }
+        }
+      );
+
+      console.log('✅ Background geolocation watcher added:', watcherId);
+      toast.success('🌍 Background location tracking enabled! Works even when app is closed.');
+      
+      // Store watcher ID to remove later
+      backgroundTrackingInterval.current = watcherId;
+
+    } catch (pluginErr) {
+      console.error('Background geolocation plugin error:', pluginErr);
+      toast.error('Failed to start background tracking: ' + pluginErr.message);
+      
+      // Fallback to interval-based tracking (only works when app open)
+      startFallbackTracking();
+    }
+  };
+
+  // Fallback tracking using intervals (only works when app is open)
+  const startFallbackTracking = () => {
+    console.log('⚠️ Using fallback tracking (app must stay open)');
+    
     backgroundTrackingInterval.current = setInterval(async () => {
       try {
-        console.log('📍 Background location update (30 min interval)');
+        console.log('📍 Fallback location update (2 min interval)');
+        
         const position = await Geolocation.getCurrentPosition({
           enableHighAccuracy: true,
           timeout: 30000,
@@ -241,25 +365,33 @@ export default function UserLocationMap() {
 
         const location = {
           lat: position.coords.latitude,
-          lng: position.coords.longitude
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
         };
 
-        // Send to backend if user is checked in
+        setCurrentLocation(location);
+
         const statusRes = await api.get('/attendance/status');
         if (statusRes.data.isCheckedIn) {
           await api.post('/attendance/location-ping', {
             lat: location.lat,
             lng: location.lng,
+            accuracy: location.accuracy,
             timestamp: new Date().toISOString()
           });
-          console.log('✅ Location sent to backend');
+          console.log('✅ Location sent (fallback)');
+          
+          setRouteHistory(prev => [...prev, {
+            latitude: location.lat,
+            longitude: location.lng,
+            timestamp: new Date().toISOString(),
+            accuracy: location.accuracy
+          }]);
         }
       } catch (err) {
-        console.error('Background location tracking failed:', err);
+        console.error('Fallback tracking failed:', err);
       }
-    }, 1800000); // 30 minutes
-
-    console.log('🌍 Background location tracking started (30 min intervals)');
+    }, 120000); // 2 minutes
   };
 
   const startLocationTracking = () => {
@@ -394,7 +526,12 @@ export default function UserLocationMap() {
   };
 
   const drawRouteOnMap = () => {
-    if (!googleMapRef.current) return;
+    if (!googleMapRef.current) {
+      console.warn('⚠️ Cannot draw route: Google Maps not initialized');
+      return;
+    }
+
+    console.log('🗺️ Drawing route with history:', routeHistory.length, 'points');
 
     // Clear existing route visualization
     if (routePolylineRef.current) {
@@ -415,12 +552,20 @@ export default function UserLocationMap() {
       lng: loc.longitude
     }));
 
+    console.log('📍 Path coordinates before adding current:', pathCoordinates.length);
+
     // Add current location to path if checked in
     if (currentLocation && isCheckedIn) {
       pathCoordinates.push(currentLocation);
+      console.log('✅ Added current location to path');
     }
 
-    if (pathCoordinates.length < 2) return;
+    if (pathCoordinates.length < 2) {
+      console.warn('⚠️ Not enough points to draw route:', pathCoordinates.length);
+      return;
+    }
+
+    console.log('🎨 Drawing polyline with', pathCoordinates.length, 'points');
 
     // Draw the route polyline with direction arrows
     routePolylineRef.current = new window.google.maps.Polyline({
@@ -443,6 +588,8 @@ export default function UserLocationMap() {
         repeat: '100px'
       }]
     });
+
+    console.log('✅ Polyline drawn successfully');
 
     // Add START marker (check-in point)
     const startPoint = pathCoordinates[0];

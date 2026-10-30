@@ -1017,4 +1017,103 @@ router.delete('/:leadId/call-recordings/:recordingId', authenticate, async (req,
   }
 });
 
+// ─── Lead Attachments (for Research Leads) ───────────────────────────────────
+
+// GET /leads/:id/attachments â€" fetch all attachments for a lead
+router.get('/:id/attachments', authenticate, async (req, res) => {
+  try {
+    const lead = await prisma.lead.findFirst({
+      where: { id: req.params.id, deletedAt: { isSet: false } }
+    });
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const attachments = await prisma.leadAttachment.findMany({
+      where: { leadId: req.params.id, deletedAt: { isSet: false } },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(attachments);
+  } catch (err) {
+    console.error('Fetch attachments error:', err);
+    res.status(500).json({ error: 'Failed to fetch attachments' });
+  }
+});
+
+// POST /leads/:id/attachments â€" upload a new attachment
+router.post('/:id/attachments', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    const lead = await prisma.lead.findFirst({
+      where: { id: req.params.id, deletedAt: { isSet: false } }
+    });
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const { type } = req.body; // photo, video, document
+
+    // Upload file to GridFS
+    const { url, fileId } = await uploadToGridFS(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    // Save attachment record
+    const attachment = await prisma.leadAttachment.create({
+      data: {
+        leadId: req.params.id,
+        url: url,
+        fileId: fileId,
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        type: type || 'file',
+        uploadedById: req.user.id
+      }
+    });
+
+    // Create activity
+    await prisma.leadActivity.create({
+      data: {
+        type: 'FILE_UPLOADED',
+        title: `Uploaded ${type || 'file'}: ${req.file.originalname}`,
+        leadId: req.params.id,
+        userId: req.user.id
+      }
+    });
+
+    res.status(201).json(attachment);
+  } catch (err) {
+    console.error('Upload attachment error:', err);
+    res.status(500).json({ error: 'Failed to upload attachment', message: err.message });
+  }
+});
+
+// DELETE /leads/:leadId/attachments/:attachmentId â€" delete an attachment
+router.delete('/:leadId/attachments/:attachmentId', authenticate, async (req, res) => {
+  try {
+    const attachment = await prisma.leadAttachment.findFirst({
+      where: { id: req.params.attachmentId, leadId: req.params.leadId }
+    });
+
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+
+    // Delete from GridFS
+    if (attachment.fileId) {
+      await deleteFromGridFS(attachment.fileId);
+    }
+
+    // Soft delete
+    await prisma.leadAttachment.update({
+      where: { id: req.params.attachmentId },
+      data: { deletedAt: new Date() }
+    });
+
+    res.json({ message: 'Attachment deleted' });
+  } catch (err) {
+    console.error('Delete attachment error:', err);
+    res.status(500).json({ error: 'Failed to delete attachment' });
+  }
+});
+
 export default router;

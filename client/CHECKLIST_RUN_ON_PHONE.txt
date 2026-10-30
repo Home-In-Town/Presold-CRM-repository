@@ -1,0 +1,143 @@
+═══════════════════════════════════════════════════════════
+    PreSold CRM - RUN ON YOUR PHONE CHECKLIST
+═══════════════════════════════════════════════════════════
+
+📱 BEFORE YOU START:
+□ Android Studio is installed
+□ Phone is connected via USB cable
+□ Phone is unlocked
+
+─────────────────────────────────────────────────────────
+
+STEP 1: ENABLE DEVELOPER MODE ON PHONE
+□ Go to Settings → About Phone
+□ Tap "Build Number" 7 times
+□ See message: "You are now a developer!"
+□ Go back to Settings → Developer Options
+□ Enable "USB Debugging"
+□ Keep phone unlocked
+
+─────────────────────────────────────────────────────────
+
+STEP 2: OPEN PROJECT IN ANDROID STUDIO
+□ Launch Android Studio
+□ Click "Open" button
+□ Navigate to this folder:
+  C:\Users\HP\Desktop\Presold-CRM-repository-main\client\android
+□ Click "OK"
+□ Wait for Gradle sync (bottom status bar)
+□ Sync complete? (Should say "Gradle sync completed")
+
+─────────────────────────────────────────────────────────
+
+STEP 3: FIX JAVA VERSION (IF NEEDED)
+If you see "Java version" error:
+□ Click File → Project Structure
+□ In SDK Location tab, check JDK location
+□ Should show JDK 17 or higher
+□ If not, click "Download JDK" → Select version 17
+□ Click Apply → OK
+□ Wait for Gradle to sync again
+
+─────────────────────────────────────────────────────────
+
+STEP 4: CONNECT YOUR PHONE
+□ Phone connected via USB
+□ Phone unlocked
+□ USB mode set to "File Transfer" (not just charging)
+□ "Allow USB debugging?" prompt appears on phone
+□ Tap "Always allow from this computer" ☑
+□ Tap "OK"
+
+─────────────────────────────────────────────────────────
+
+STEP 5: SELECT DEVICE IN ANDROID STUDIO
+□ Look at top toolbar
+□ Find device dropdown (next to ▶️ button)
+□ Click dropdown
+□ See your phone's name?
+  □ YES - Select it → Continue to Step 6
+  □ NO - See troubleshooting below
+
+Troubleshooting if phone not showing:
+□ Unplug and replug USB cable
+□ Try different USB port
+□ On phone: Toggle USB Debugging OFF then ON
+□ Wait 10 seconds and check dropdown again
+
+─────────────────────────────────────────────────────────
+
+STEP 6: RUN THE APP!
+□ Phone selected in dropdown
+□ Click green ▶️ Play button (or press Shift+F10)
+□ Watch bottom panel for build progress
+□ See "Building..." → "Installing..." → "Launching..."
+□ First build takes 5-10 minutes (be patient!)
+□ App appears on phone screen!
+
+─────────────────────────────────────────────────────────
+
+STEP 7: TEST ON PHONE
+□ App opens on phone
+□ Shows login screen
+□ Try logging in
+□ Test features:
+  □ Dashboard loads
+  □ Can navigate between pages
+  □ Location permissions work
+  □ Camera works (if testing upload)
+  □ All CRM features accessible
+
+─────────────────────────────────────────────────────────
+
+✅ SUCCESS! YOUR APP IS RUNNING!
+
+Your APK is also saved at:
+client\android\app\build\outputs\apk\debug\app-debug.apk
+
+You can:
+1. Share this APK file with others
+2. Install it on other Android phones
+3. Keep it as backup
+
+─────────────────────────────────────────────────────────
+
+🐛 COMMON ISSUES:
+
+Issue: "Gradle sync failed"
+Fix: File → Invalidate Caches → Invalidate and Restart
+
+Issue: Build fails with errors
+Fix: Build → Clean Project, then Build → Rebuild Project
+
+Issue: "Installation failed"
+Fix: Uninstall app from phone first, then run again
+
+Issue: App crashes on launch
+Fix: Check Logcat panel (bottom) for error messages
+
+Issue: Phone disconnects during build
+Fix: Keep phone unlocked during entire build process
+
+─────────────────────────────────────────────────────────
+
+📞 NEED HELP?
+
+Check these files:
+- OPEN_IN_ANDROID_STUDIO.md (detailed guide)
+- APK_BUILD_COMPLETE_GUIDE.md (full docs)
+- ANDROID_BUILD_README.md (technical reference)
+
+─────────────────────────────────────────────────────────
+
+🎉 ENJOY YOUR PRESOLD CRM MOBILE APP!
+
+Features working:
+✓ All web features
+✓ Native GPS tracking
+✓ Camera access
+✓ File uploads
+✓ Offline storage
+✓ Same beautiful UI
+
+═══════════════════════════════════════════════════════════

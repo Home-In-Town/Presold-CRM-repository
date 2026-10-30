@@ -158,6 +158,36 @@ model LeadFile {
   lead         Lead      @relation(fields: [leadId], references: [id])
 }
 
+model CallRecording {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  audioUrl    String
+  audioFileId String?
+  duration    Int       @default(0)   // in seconds
+  notes       String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+  leadId      String    @db.ObjectId
+  userId      String    @db.ObjectId  // who made the call
+
+  @@index([leadId, createdAt])
+}
+
+model LeadAttachment {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  leadId        String    @db.ObjectId
+  url           String
+  fileId        String?
+  fileName      String
+  mimeType      String
+  fileSize      Int       @default(0)
+  type          String    @default("file")  // photo, video, document, file
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+  uploadedById  String    @db.ObjectId
+
+  @@index([leadId, createdAt])
+}
+
 model JourneyStep {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   key         String    @unique

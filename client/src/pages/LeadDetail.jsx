@@ -5,11 +5,14 @@ import {
   ArrowLeft, Phone, Building2, MapPin, Upload,
   Check, MessageCircle, FileText, Image, Video, Send,
   ChevronDown, ChevronRight, Plus, X, Loader2,
-  Pencil, Trash2, GripVertical, ArrowUp, ArrowDown
+  Pencil, Trash2, GripVertical, ArrowUp, ArrowDown, Mic
 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
+import CallRecorder from '../components/CallRecorder';
+import RealPhoneCall from '../components/RealPhoneCall';
+import ResearchLeadView from '../components/ResearchLeadView';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const getFileUrl = (url) => {
@@ -39,6 +42,9 @@ export default function LeadDetail() {
   const [lead, setLead]         = useState(null);
   const [loading, setLoading]   = useState(true);
   const [note, setNote]         = useState('');
+  const [showCallRecorder, setShowCallRecorder] = useState(false);
+  const [showRealCall, setShowRealCall] = useState(false);
+  const [callRecordings, setCallRecordings] = useState([]);
 
   // Pipeline stages (dynamic, admin-editable)
   const [stages, setStages]         = useState([]);
@@ -66,6 +72,7 @@ export default function LeadDetail() {
     loadLead();
     loadStages();
     loadJourney();
+    loadCallRecordings();
   }, [id]);
 
   // ── Loaders ──────────────────────────────────────────────────────────────
@@ -99,6 +106,55 @@ export default function LeadDetail() {
       });
       setJourneySteps(withProgress);
     } catch {}
+  };
+
+  const loadCallRecordings = async () => {
+    try {
+      const res = await api.get(`/leads/${id}/call-recordings`);
+      setCallRecordings(res.data || []);
+    } catch (err) {
+      // Endpoint might not exist yet, ignore error
+      console.log('Call recordings not available');
+    }
+  };
+
+  const saveCallRecording = async (formData) => {
+    await api.post(`/leads/${id}/call-recordings`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    await loadCallRecordings();
+  };
+
+  const handleCallClick = (e) => {
+    e.preventDefault();
+    // Open real phone call interface with automatic recording
+    setShowRealCall(true);
+  };
+
+  const handleCallComplete = async (recordingData, duration) => {
+    if (!recordingData) {
+      console.log('No recording data available');
+      return;
+    }
+
+    try {
+      // Convert base64 to blob
+      const base64Response = await fetch(`data:${recordingData.mimeType};base64,${recordingData.base64}`);
+      const blob = await base64Response.blob();
+      
+      // Create FormData
+      const formData = new FormData();
+      formData.append('audio', blob, `call_${Date.now()}.${recordingData.mimeType.split('/')[1]}`);
+      formData.append('duration', recordingData.duration.toString());
+      formData.append('notes', `Call with ${lead.fullName || lead.company}`);
+
+      // Save to backend
+      await saveCallRecording(formData);
+      toast.success('Call recording saved successfully!');
+    } catch (err) {
+      console.error('Failed to save call recording:', err);
+      toast.error('Failed to save call recording');
+    }
   };
 
   // ── Stage actions ─────────────────────────────────────────────────────────
@@ -277,6 +333,42 @@ export default function LeadDetail() {
   );
   if (!lead) return null;
 
+  // Check if this is a research lead
+  const isResearchLead = lead.tags && JSON.parse(lead.tags || '[]').includes('research-data');
+
+  // If it's a research lead, show simplified view
+  if (isResearchLead) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-3 pb-6">
+        {/* Back */}
+        <button onClick={() => navigate('/leads')} className="btn-ghost flex items-center gap-2 text-sm -ml-3">
+          <ArrowLeft size={16} /> Back to Leads
+        </button>
+
+        {/* ── Header ── */}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-pink-600/20 flex items-center justify-center flex-shrink-0">
+                <span className="text-base font-bold text-pink-400">{(lead.fullName || lead.company || '?')[0]}</span>
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-base font-bold text-white truncate">{lead.fullName || lead.company || 'Unnamed lead'}</h1>
+                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-500 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-400 font-semibold">RESEARCH LEAD</span>
+                  {lead.company && <span className="flex items-center gap-1"><Building2 size={10} /> {lead.company}</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Research Lead View */}
+        <ResearchLeadView lead={lead} onUpdate={loadLead} />
+      </div>
+    );
+  }
+
   const completedCount = journeySteps.filter(s => s.completed).length;
   const progress = Math.round((completedCount / Math.max(journeySteps.length, 1)) * 100);
 
@@ -303,9 +395,9 @@ export default function LeadDetail() {
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <a href={`tel:${lead.phone}`} className="btn-primary text-xs px-3 py-2 flex items-center gap-1.5">
+            <button onClick={handleCallClick} className="btn-primary text-xs px-3 py-2 flex items-center gap-1.5">
               <Phone size={13} /> Call
-            </a>
+            </button>
             <a href={`https://wa.me/${lead.phone}`} target="_blank" rel="noreferrer" className="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5">
               <MessageCircle size={13} /> WhatsApp
             </a>
@@ -688,6 +780,51 @@ export default function LeadDetail() {
         )}
       </div>
 
+      {/* ── Call Recordings ── */}
+      <div className="glass-card p-4">
+        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <Mic size={14} className="text-brand-400" />
+          Call Recordings
+        </h3>
+        {callRecordings.length > 0 ? (
+          <div className="space-y-2.5">
+            {callRecordings.map(rec => (
+              <div key={rec.id} className="rounded-xl border border-white/8 bg-dark-700/40 p-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-brand-500/15 flex items-center justify-center flex-shrink-0">
+                    <Phone size={13} className="text-brand-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-xs font-medium text-gray-300">
+                        {new Date(rec.createdAt).toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        {Math.floor(rec.duration / 60)}:{String(rec.duration % 60).padStart(2, '0')}
+                      </span>
+                    </div>
+                    {rec.audioUrl && (
+                      <audio controls className="w-full h-8 mb-2" style={{ maxHeight: '32px' }}>
+                        <source src={getFileUrl(rec.audioUrl)} type="audio/webm" />
+                        <source src={getFileUrl(rec.audioUrl)} type="audio/mp4" />
+                        <source src={getFileUrl(rec.audioUrl)} type="audio/mpeg" />
+                      </audio>
+                    )}
+                    {rec.notes && (
+                      <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">{rec.notes}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-600 text-center py-4">
+            No call recordings yet. Click Call button to record.
+          </p>
+        )}
+      </div>
+
       {/* ── Activity Timeline ── */}
       <div className="glass-card p-4">
         <h3 className="text-sm font-semibold text-white mb-3">Activity</h3>
@@ -704,6 +841,26 @@ export default function LeadDetail() {
           {!lead.activities?.length && <p className="text-xs text-gray-600 text-center py-2">No activities yet</p>}
         </div>
       </div>
+
+      {/* ── Real Phone Call Interface ── */}
+      {showRealCall && (
+        <RealPhoneCall
+          phoneNumber={lead.phone}
+          leadName={lead.fullName || lead.company}
+          leadId={lead.id}
+          onClose={() => setShowRealCall(false)}
+          onCallComplete={handleCallComplete}
+        />
+      )}
+
+      {/* ── Call Recorder Modal (Manual) ── */}
+      {showCallRecorder && (
+        <CallRecorder
+          leadName={lead.fullName || lead.company}
+          onClose={() => setShowCallRecorder(false)}
+          onSave={saveCallRecording}
+        />
+      )}
     </div>
   );
 }

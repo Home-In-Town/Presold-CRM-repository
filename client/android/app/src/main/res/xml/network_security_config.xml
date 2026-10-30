@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Allow HTTPS connections to production backend -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">presold-crm-server-624770114041.asia-south1.run.app</domain>
+        <domain includeSubdomains="true">sales.homeintown.in</domain>
+    </domain-config>
+</network-security-config>
