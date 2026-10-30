@@ -7,6 +7,54 @@ import trackingDb from '../config/tracking-db.js';
 
 const db = new PrismaClient();
 
+// Cleanup stale check-ins (from previous days)
+async function cleanupStaleCheckIns() {
+  try {
+    console.log('🧹 Running stale check-in cleanup...');
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Find all CHECKED_IN records from before today
+    const staleCheckIns = await trackingDb.checkInOut.findMany({
+      where: {
+        status: 'CHECKED_IN',
+        checkInTime: {
+          lt: today
+        }
+      }
+    });
+
+    if (staleCheckIns.length === 0) {
+      console.log('✅ No stale check-ins found');
+      return;
+    }
+
+    console.log(`📊 Found ${staleCheckIns.length} stale check-ins, auto-checking them out...`);
+
+    for (const checkIn of staleCheckIns) {
+      // Auto checkout at end of check-in day (10 PM)
+      const checkoutTime = new Date(checkIn.checkInTime);
+      checkoutTime.setHours(22, 0, 0, 0);
+
+      await trackingDb.checkInOut.update({
+        where: { id: checkIn.id },
+        data: {
+          status: 'CHECKED_OUT',
+          checkOutTime: checkoutTime,
+          checkOutLat: checkIn.checkInLat,
+          checkOutLng: checkIn.checkInLng,
+          checkOutAddress: checkIn.checkInAddress || 'Auto checkout (cleanup)'
+        }
+      });
+    }
+
+    console.log(`✅ Cleaned up ${staleCheckIns.length} stale check-ins`);
+  } catch (error) {
+    console.error('❌ Error in cleanup stale check-ins:', error);
+  }
+}
+
 // Auto checkout at 10 PM every day
 const autoCheckout = cron.schedule('0 22 * * *', async () => {
   console.log('🕙 Running auto checkout at 10 PM...');
@@ -190,11 +238,22 @@ const autoReportSubmission = cron.schedule('0 * * * *', async () => {
 // Start all scheduled tasks
 export function startScheduledTasks() {
   console.log('🚀 Starting scheduled tasks...');
+  
+  // Run cleanup immediately on startup
+  cleanupStaleCheckIns();
+  
   autoCheckout.start();
   autoReportSubmission.start();
+  
+  // Schedule daily cleanup at 6 AM
+  cron.schedule('0 6 * * *', cleanupStaleCheckIns, {
+    timezone: 'Asia/Kolkata'
+  });
+  
   console.log('✅ Scheduled tasks started:');
   console.log('  - Auto checkout at 10 PM daily');
   console.log('  - Auto report submission every hour');
+  console.log('  - Stale check-in cleanup at 6 AM daily (and on startup)');
 }
 
 // Stop all scheduled tasks
