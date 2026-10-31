@@ -77,95 +77,58 @@ router.post('/analyze-media', authenticate, async (req, res) => {
 
     console.log('Using Groq vision analysis...');
 
-    // Construct image URL for Groq Vision API
+    // Use the more reliable vision model
+    const visionModel = 'llama-3.2-11b-vision-preview';
+    console.log(`Calling Groq API with ${visionModel}...`);
+    
+    // Construct image URL for Groq Vision API  
     const imageUrl = `data:image/${format || 'jpeg'};base64,${image}`;
 
-    // Call Groq Vision API to analyze the image
-    console.log('Calling Groq API with llama-3.2-11b-vision-preview...');
-    
+    // Simplified prompt for better extraction
+    const extractionPrompt = `You are a lead data extractor. Analyze this image and extract ONLY the contact/business information you can clearly see.
+
+Extract these fields (use null if not visible):
+- fullName: Person's full name
+- company: Company/business name
+- phone: Phone number (with country code if shown)
+- email: Email address
+- projectName: Property/project name
+- location: City/area/address
+
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "fullName": "value or null",
+  "company": "value or null",
+  "phone": "value or null",
+  "email": "value or null",
+  "projectName": "value or null",
+  "location": "value or null"
+}`;
+
     let response;
     try {
       response = await groq.chat.completions.create({
-        model: 'llama-3.2-11b-vision-preview',
+        model: visionModel,
         messages: [
           {
             role: 'user',
             content: [
-              {
-                type: 'text',
-                text: `You are an AI assistant that extracts business lead information from images. 
-Extract the following information if visible:
-- Lead name (full name of person)
-- Company name
-- Phone number
-- Email address
-- Project name (if it's a real estate/construction ad)
-- Advertiser identity (whose page/brand is this)
-- Ad running since (how long the ad has been running)
-- Creative type (Static Poster, Reels/Video, Drone shot)
-- Funnel type (Lead Form, WhatsApp redirect, Landing Page)
-
-Return ONLY valid JSON in this exact format (no markdown):
-{
-  "leadData": {
-    "fullName": "extracted name or null",
-    "company": "extracted company or null",
-    "phone": "extracted phone or null",
-    "email": "extracted email or null",
-    "projectName": "extracted project name or null",
-    "location": "extracted location or null"
-  },
-  "researchData": {
-    "advertiserIdentity": "whose page/brand or null",
-    "adRunningSince": "duration or null",
-    "creativeType": "Static Poster/Reels/Drone/null",
-    "funnelType": "Lead Form/WhatsApp/Landing Page/null"
-  }
-}
-
-If information is not visible or unclear, use null. Be precise and only extract what you can clearly see.`
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageUrl
-                }
-              }
+              { type: 'text', text: extractionPrompt },
+              { type: 'image_url', image_url: { url: imageUrl } }
             ]
           }
         ],
-        max_tokens: 1000,
-        temperature: 0.2
+        max_tokens: 500,
+        temperature: 0.1 // Very low temperature for consistent extraction
       });
+      
+      console.log('✅ Groq API response received');
     } catch (apiError) {
-      console.error('Groq API error:', apiError);
-      // Try with fallback model
-      console.log('Retrying with llama-3.2-90b-vision-preview...');
-      try {
-        response = await groq.chat.completions.create({
-          model: 'llama-3.2-90b-vision-preview',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `Extract lead information from this image as JSON: {leadData: {fullName, company, phone, email, projectName, location}, researchData: {advertiserIdentity, adRunningSince, creativeType, funnelType}}`
-                },
-                {
-                  type: 'image_url',
-                  image_url: { url: imageUrl }
-                }
-              ]
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.2
-        });
-      } catch (fallbackError) {
-        console.error('Fallback model also failed:', fallbackError);
-        throw new Error('Image analysis failed. Both models unavailable: ' + fallbackError.message);
-      }
+      console.error('❌ Groq API error:', apiError);
+      return res.status(500).json({ 
+        error: 'Image analysis failed. Please try again or check your Groq API key.',
+        details: apiError.message 
+      });
     }
 
     const content = response.choices[0]?.message?.content;
@@ -181,6 +144,7 @@ If information is not visible or unclear, use null. Be precise and only extract 
       } else {
         throw new Error('No JSON found in response');
       }
+      console.log('✅ Parsed extracted data:', extractedData);
     } catch (parseError) {
       console.error('Failed to parse AI response:', content);
       return res.status(500).json({ 
@@ -189,11 +153,23 @@ If information is not visible or unclear, use null. Be precise and only extract 
       });
     }
 
-    // Validate and return the extracted data
+    // Validate and return the extracted data in the expected format
     res.json({
-      leadData: extractedData.leadData || {},
-      researchData: extractedData.researchData || {},
-      confidence: 'high' // Could be enhanced with confidence scoring
+      leadData: {
+        fullName: extractedData.fullName,
+        company: extractedData.company,
+        phone: extractedData.phone,
+        email: extractedData.email,
+        projectName: extractedData.projectName,
+        location: extractedData.location
+      },
+      researchData: {
+        advertiserIdentity: null,
+        adRunningSince: null,
+        creativeType: null,
+        funnelType: null
+      },
+      confidence: 'high'
     });
 
   } catch (err) {

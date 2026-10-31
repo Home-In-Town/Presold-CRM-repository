@@ -300,22 +300,45 @@ const UserLocationMap = () => {
 
     // Watch position for real-time updates when app is open
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
+      async (position) => {
         const newLocation = {
           lat: position.coords.latitude,
-          lng: position.coords.longitude
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
         };
         setCurrentLocation(newLocation);
+        
+        // Send location ping to server when checked in
+        try {
+          const statusRes = await api.get('/attendance/status');
+          if (statusRes.data.isCheckedIn) {
+            console.log('📍 Sending location ping from watchPosition:', newLocation);
+            await api.post('/attendance/location-ping', {
+              lat: newLocation.lat,
+              lng: newLocation.lng,
+              accuracy: newLocation.accuracy,
+              timestamp: new Date().toISOString()
+            });
+            console.log('✅ Location ping sent successfully');
+            
+            // Reload route to show new point
+            await loadTodayRoute();
+          }
+        } catch (err) {
+          console.error('Failed to send location ping:', err);
+        }
       },
       (error) => {
         console.error('Location tracking error:', error);
       },
       {
         enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0
+        timeout: 15000,
+        maximumAge: 60000 // Accept position up to 1 minute old
       }
     );
+    
+    console.log('✅ Location tracking started with watchId:', watchIdRef.current);
   };
 
   const initializeMap = () => {
