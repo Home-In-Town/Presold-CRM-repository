@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import UserLocationMap from '../components/UserLocationMap';
 import LocationTimeline from '../components/LocationTimeline';
 import QuickLeadCapture from '../components/QuickLeadCapture';
+import CheckInOutButton from '../components/CheckInOutButton';
 
 const fadeUp = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
 
@@ -567,60 +568,9 @@ export default function Dashboard() {
     </div>
 
     {/* Floating Check-In/Out Button - Bottom Right - For ALL USERS except ADMIN */}
+    {/* Floating Check-In/Out Button - Bottom Right - For ALL USERS except ADMIN */}
     {user?.role !== 'ADMIN' && (
-      <>
-        <motion.button
-          onClick={toggleAttendance}
-          disabled={attendanceLoading}
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
-          whileTap={{ scale: 0.95 }}
-          className={`fixed bottom-20 right-6 z-50 rounded-full shadow-2xl flex flex-col items-center justify-center transition-all ${
-            attendance?.checkedOutAt || !attendance
-              ? 'w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/40'
-              : 'w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/50'
-          }`}
-        >
-          {attendanceLoading ? (
-            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <CheckCircle2 size={attendance && !attendance.checkedOutAt ? 24 : 28} className="text-white" />
-              {attendance && !attendance.checkedOutAt && elapsedTime && (
-                <span className="text-[9px] text-white font-semibold mt-0.5 leading-none">
-                  {elapsedTime.split(' ')[0]} {elapsedTime.split(' ')[1]}
-                </span>
-              )}
-            </>
-          )}
-        </motion.button>
-
-        {/* Attendance Status Tooltip - Shows status */}
-        {attendance && !attendance.checkedOutAt && (
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.7 }}
-            className="fixed bottom-24 right-28 z-40 hidden lg:block"
-          >
-            <div className="glass-card px-3 py-2 text-xs">
-              <p className="font-semibold text-green-400 text-[10px] mb-1 flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                Checked In
-              </p>
-              <p className="text-[9px] text-gray-400">
-                {new Date(attendance.checkedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-              {elapsedTime && (
-                <p className="text-[9px] text-gray-500 mt-1">
-                  {elapsedTime}
-                </p>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </>
+      <CheckInOutButton />
     )}
 
     {/* Quick Lead Capture - For all users except ADMIN */}
