@@ -13,6 +13,8 @@ const UserLocationMap = () => {
   });
   const [currentLocation, setCurrentLocation] = useState(null);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [checkInTime, setCheckInTime] = useState(null);
+  const [elapsedTime, setElapsedTime] = useState('00:00:00');
   const [routeHistory, setRouteHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const mapRef = useRef(null);
@@ -51,6 +53,27 @@ const UserLocationMap = () => {
       }
     };
   }, []);
+
+  // Update elapsed time every second
+  useEffect(() => {
+    if (!isCheckedIn || !checkInTime) return;
+
+    const timer = setInterval(() => {
+      const now = new Date();
+      const checkIn = new Date(checkInTime);
+      const diff = now - checkIn;
+      
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      setElapsedTime(
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isCheckedIn, checkInTime]);
 
   useEffect(() => {
     // Initialize map when Google Maps is loaded
@@ -186,6 +209,7 @@ const UserLocationMap = () => {
       const res = await api.get('/attendance/status');
       if (res.data.isCheckedIn) {
         setIsCheckedIn(true);
+        setCheckInTime(res.data.checkInTime);
         loadTodayRoute();
       }
     } catch (err) {
@@ -615,21 +639,43 @@ const UserLocationMap = () => {
         
         {/* Location Status */}
         <div className="flex items-center gap-2">
-          {locationPermission === 'granted' ? (
-            <div className="flex items-center gap-1 text-green-400 text-xs">
-              <CheckCircle size={14} />
-              <span>Location Active</span>
-            </div>
-          ) : locationPermission === 'denied' ? (
-            <div className="flex items-center gap-1 text-red-400 text-xs">
-              <Lock size={14} />
-              <span>Location Blocked</span>
+          {isCheckedIn ? (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/20 border border-green-500/30">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-green-400 text-xs font-semibold">CHECKED IN</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1 text-yellow-400 text-xs">
-              <AlertCircle size={14} />
-              <span>Permission Required</span>
+            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-500/20 border border-gray-500/30">
+              <div className="w-2 h-2 bg-gray-500 rounded-full" />
+              <span className="text-gray-400 text-xs font-semibold">NOT CHECKED IN</span>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Additional Status Info */}
+      <div className="px-4 py-2 bg-dark-900/50 border-b border-white/5">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            {locationPermission === 'granted' ? (
+              <span className="text-green-400 flex items-center gap-1">
+                <CheckCircle size={12} />
+                Location Permission: Granted
+              </span>
+            ) : locationPermission === 'denied' ? (
+              <span className="text-red-400 flex items-center gap-1">
+                <Lock size={12} />
+                Location Permission: Denied
+              </span>
+            ) : (
+              <span className="text-yellow-400 flex items-center gap-1">
+                <AlertCircle size={12} />
+                Location Permission: Pending
+              </span>
+            )}
+          </div>
+          {isCheckedIn && (
+            <span className="text-brand-400 font-mono">{elapsedTime}</span>
           )}
         </div>
       </div>

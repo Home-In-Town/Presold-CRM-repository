@@ -342,13 +342,13 @@ export default function CheckInOutButton() {
             onClick={isCheckedIn ? handleCheckOut : handleCheckIn}
             disabled={loading || (locationPermission === 'denied')}
             className={`
-              w-16 h-16 rounded-full shadow-xl flex items-center justify-center
-              transition-all duration-300 border-2
+              w-16 h-16 rounded-full shadow-2xl flex items-center justify-center
+              transition-all duration-300 border-4
               ${isCheckedIn 
-                ? 'bg-red-500 hover:bg-red-600 border-red-400' 
+                ? 'bg-red-600 hover:bg-red-700 border-red-300 shadow-red-500/50' 
                 : locationPermission === 'denied'
                   ? 'bg-gray-500 cursor-not-allowed border-gray-400'
-                  : 'bg-green-500 hover:bg-green-600 border-green-400'
+                  : 'bg-green-600 hover:bg-green-700 border-green-300 shadow-green-500/50'
               }
               ${loading ? 'opacity-50 cursor-not-allowed' : ''}
             `}
@@ -357,15 +357,21 @@ export default function CheckInOutButton() {
             {loading ? (
               <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : isCheckedIn ? (
-              <LogOut size={24} className="text-white" />
+              <LogOut size={26} className="text-white drop-shadow-lg" />
             ) : (
-              <LogIn size={24} className="text-white" />
+              <LogIn size={26} className="text-white drop-shadow-lg" />
             )}
           </motion.button>
 
-          {/* Label */}
-          <div className="text-xs font-medium text-gray-400 bg-dark-800 px-3 py-1 rounded-full border border-white/10">
-            {isCheckedIn ? 'Check Out' : 'Check In'}
+          {/* Label with Status Color */}
+          <div className={`
+            text-xs font-bold px-3 py-1 rounded-full border-2
+            ${isCheckedIn 
+              ? 'text-red-400 bg-red-950/80 border-red-500/50' 
+              : 'text-green-400 bg-green-950/80 border-green-500/50'
+            }
+          `}>
+            {isCheckedIn ? '🔴 Checked In' : '🟢 Check In'}
           </div>
         </div>
       </motion.div>
