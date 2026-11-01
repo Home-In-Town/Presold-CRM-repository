@@ -28,6 +28,7 @@ import locationRoutes from './routes/location.js';
 import projectRoutes from './routes/projects.js';
 import attendanceRoutes from './routes/attendance.js';
 import workingHoursRoutes from './routes/workingHours.js';
+import trainingRoutes from './routes/training.js';
 import { scheduleMonthlyCleanup } from './jobs/monthlyCleanup.js';
 
 const app = express();
@@ -132,6 +133,7 @@ app.use('/api/location', locationRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/working-hours', workingHoursRoutes);
+app.use('/api/training', trainingRoutes);
 
 // Health
 app.get('/api/health', async (req, res) => {

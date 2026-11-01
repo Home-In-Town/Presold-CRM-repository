@@ -52,6 +52,7 @@ model User {
   createdProjects     Project[]            @relation("ProjectCreator")
   createdReports      DailyReport[]        @relation("ReportCreator")
   createdLeads        Lead[]               @relation("LeadCreator")
+  trainingCompletions TrainingCompletion[]
 }
 
 model Session {
@@ -641,3 +642,66 @@ model Project {
   @@index([city])
 }
 
+
+
+// Training Module Models
+model TrainingModule {
+  id                String              @id @default(auto()) @map("_id") @db.ObjectId
+  topicName         String
+  description       String?
+  videoUrl          String              // GridFS file ID or external URL
+  videoFileId       String?             // GridFS file ID for cleanup
+  scheduledDate     DateTime            // Date when training becomes available
+  scheduledTime     String              // Time in 12hr format (e.g., "02:30 PM")
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdById       String              @db.ObjectId
+  
+  questions         TrainingQuestion[]
+  completions       TrainingCompletion[]
+  
+  @@index([scheduledDate, isActive])
+}
+
+model TrainingQuestion {
+  id                String              @id @default(auto()) @map("_id") @db.ObjectId
+  moduleId          String              @db.ObjectId
+  module            TrainingModule      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  questionText      String
+  options           String[]            // Array of options (4 options typically)
+  correctAnswer     Int                 // Index of correct option (0-3)
+  orderIndex        Int                 // Order of question in quiz
+  
+  createdAt         DateTime            @default(now())
+  
+  @@index([moduleId, orderIndex])
+}
+
+model TrainingCompletion {
+  id                String              @id @default(auto()) @map("_id") @db.ObjectId
+  moduleId          String              @db.ObjectId
+  module            TrainingModule      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  userId            String              @db.ObjectId
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  videoWatched      Boolean             @default(false)
+  videoWatchedAt    DateTime?
+  
+  quizCompleted     Boolean             @default(false)
+  quizCompletedAt   DateTime?
+  score             Int?                // Score out of total questions
+  totalQuestions    Int?
+  percentage        Float?              // Percentage score
+  
+  answers           Json?               // Store user's answers { questionId: selectedOptionIndex }
+  
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@unique([moduleId, userId])
+  @@index([userId, quizCompleted])
+  @@index([moduleId, quizCompleted])
+}
