@@ -27,6 +27,7 @@ import Meetings from './pages/Meetings';
 import AdminLocationMonitor from './pages/AdminLocationMonitor';
 import AdminReportMonitor from './pages/AdminReportMonitor';
 import AttendanceReport from './pages/AttendanceReport';
+import ActivityMonitor from './pages/ActivityMonitor';
 import AdminTraining from './pages/AdminTraining';
 import TrainingLibrary from './pages/TrainingLibrary';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -151,6 +152,7 @@ export default function App() {
         <Route path="location-monitor" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><AdminLocationMonitor /></ErrorBoundary></RoleProtectedRoute>} />
         <Route path="report-monitor" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><AdminReportMonitor /></ErrorBoundary></RoleProtectedRoute>} />
         <Route path="attendance-report" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><AttendanceReport /></ErrorBoundary></RoleProtectedRoute>} />
+        <Route path="activity-monitor" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><ActivityMonitor /></ErrorBoundary></RoleProtectedRoute>} />
         <Route path="training" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><AdminTraining /></ErrorBoundary></RoleProtectedRoute>} />
         <Route path="training-library" element={<ErrorBoundary><TrainingLibrary /></ErrorBoundary>} />
       </Route>

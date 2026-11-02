@@ -23,6 +23,7 @@ const navItems = [
   { path: '/location-monitor', label: 'Location', icon: MapPin },
   { path: '/report-monitor', label: 'Report Monitor', icon: FileText },
   { path: '/attendance-report', label: 'Attendance', icon: ClipboardList },
+  { path: '/activity-monitor', label: 'Activity Monitor', icon: ActivityIcon },
   { path: '/training', label: 'Training', icon: GraduationCap },
   { path: '/training-library', label: 'My Training', icon: GraduationCap },
   { path: '/ai', label: 'AI Assistant', icon: Bot },
@@ -32,6 +33,9 @@ const navItems = [
   { path: '/team', label: 'Team', icon: UsersRound },
   { path: '/settings', label: 'Settings', icon: Settings }
 ];
+
+// Import Activity icon
+import { Activity as ActivityIcon } from 'lucide-react';
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -106,8 +110,8 @@ export default function DashboardLayout() {
 
   // All roles just use /playbook — the PlaybookRouter in App.jsx renders the correct one
   const visibleNavItems = navItems.filter(item => {
-    // Location monitor, report monitor, attendance report, and training (admin panel) - admin only
-    if (item.path === '/location-monitor' || item.path === '/report-monitor' || item.path === '/attendance-report' || item.path === '/training') {
+    // Location monitor, report monitor, attendance report, activity monitor, and training (admin panel) - admin only
+    if (item.path === '/location-monitor' || item.path === '/report-monitor' || item.path === '/attendance-report' || item.path === '/activity-monitor' || item.path === '/training') {
       return user?.role === 'ADMIN';
     }
 
