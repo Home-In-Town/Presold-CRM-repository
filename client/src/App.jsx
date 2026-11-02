@@ -28,6 +28,7 @@ import AdminLocationMonitor from './pages/AdminLocationMonitor';
 import AdminReportMonitor from './pages/AdminReportMonitor';
 import AttendanceReport from './pages/AttendanceReport';
 import AdminTraining from './pages/AdminTraining';
+import TrainingLibrary from './pages/TrainingLibrary';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Smart playbook router — renders the correct playbook based on user role
@@ -151,6 +152,7 @@ export default function App() {
         <Route path="report-monitor" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><AdminReportMonitor /></ErrorBoundary></RoleProtectedRoute>} />
         <Route path="attendance-report" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><AttendanceReport /></ErrorBoundary></RoleProtectedRoute>} />
         <Route path="training" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><ErrorBoundary><AdminTraining /></ErrorBoundary></RoleProtectedRoute>} />
+        <Route path="training-library" element={<ErrorBoundary><TrainingLibrary /></ErrorBoundary>} />
       </Route>
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>

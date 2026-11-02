@@ -24,6 +24,7 @@ const navItems = [
   { path: '/report-monitor', label: 'Report Monitor', icon: FileText },
   { path: '/attendance-report', label: 'Attendance', icon: ClipboardList },
   { path: '/training', label: 'Training', icon: GraduationCap },
+  { path: '/training-library', label: 'My Training', icon: GraduationCap },
   { path: '/ai', label: 'AI Assistant', icon: Bot },
   { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
@@ -105,9 +106,14 @@ export default function DashboardLayout() {
 
   // All roles just use /playbook — the PlaybookRouter in App.jsx renders the correct one
   const visibleNavItems = navItems.filter(item => {
-    // Location monitor, report monitor, attendance report, and training - admin only
+    // Location monitor, report monitor, attendance report, and training (admin panel) - admin only
     if (item.path === '/location-monitor' || item.path === '/report-monitor' || item.path === '/attendance-report' || item.path === '/training') {
       return user?.role === 'ADMIN';
+    }
+
+    // Training library - available for all users
+    if (item.path === '/training-library') {
+      return true;
     }
     
     // Qualifier — sees leads, pipeline, dashboard, assets, settings
