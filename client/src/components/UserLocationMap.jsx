@@ -31,23 +31,39 @@ const UserLocationMap = () => {
     checkCheckInStatus();
     
     // Set up app state change listener to capture location when app opens
+    let appStateListener = null;
+    
     if (Capacitor.isNativePlatform()) {
-      const appStateListener = App.addListener('appStateChange', async ({ isActive }) => {
+      App.addListener('appStateChange', async ({ isActive }) => {
         if (isActive) {
           console.log('📱 App opened - capturing location');
           await captureLocationOnAppOpen();
         }
+      }).then(listener => {
+        appStateListener = listener;
       });
-      
-      return () => {
-        appStateListener.remove();
-        if (watchIdRef.current) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
+    } else {
+      // For web, use visibility change
+      const handleVisibilityChange = async () => {
+        if (document.visibilityState === 'visible') {
+          console.log('🌐 Tab visible - capturing location');
+          await captureLocationOnAppOpen();
         }
       };
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      // Also capture on page load
+      captureLocationOnAppOpen();
     }
     
     return () => {
+      if (appStateListener) {
+        appStateListener.remove();
+      } else if (!Capacitor.isNativePlatform()) {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      
       if (watchIdRef.current) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
@@ -585,24 +601,48 @@ const UserLocationMap = () => {
       });
     }
 
-    // Add intermediate waypoint markers (skip first and last)
+    // Add intermediate waypoint markers (skip first and last) - VISIBLE numbered markers
     pathCoordinates.slice(1, -1).forEach((point, index) => {
       const waypoint = new window.google.maps.Marker({
         position: point,
         map: googleMapRef.current,
-        title: `Waypoint ${index + 1}`,
+        title: `Location ${index + 1}`,
+        label: {
+          text: `${index + 1}`,
+          color: '#ffffff',
+          fontSize: '11px',
+          fontWeight: 'bold'
+        },
         icon: {
           path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 5,
+          scale: 10, // Larger size (was 5)
           fillColor: '#8B5CF6',
-          fillOpacity: 0.8,
+          fillOpacity: 0.9,
           strokeColor: '#ffffff',
-          strokeWeight: 1
+          strokeWeight: 2
         },
         zIndex: 500
       });
+
+      // Add info window for each waypoint
+      const waypointInfo = new window.google.maps.InfoWindow({
+        content: `
+          <div style="padding: 8px; color: #000;">
+            <h4 style="margin: 0 0 4px 0; font-weight: bold;">📍 Location Point ${index + 1}</h4>
+            <p style="margin: 4px 0; font-size: 11px;">Lat: ${point.lat.toFixed(6)}</p>
+            <p style="margin: 4px 0; font-size: 11px;">Lng: ${point.lng.toFixed(6)}</p>
+          </div>
+        `
+      });
+
+      waypoint.addListener('click', () => {
+        waypointInfo.open(googleMapRef.current, waypoint);
+      });
+
       waypointMarkersRef.current.push(waypoint);
     });
+
+    console.log('✅ Added', pathCoordinates.slice(1, -1).length, 'visible waypoint markers');
 
     // Fit map bounds to show entire route
     const bounds = new window.google.maps.LatLngBounds();
@@ -723,16 +763,20 @@ const UserLocationMap = () => {
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span className="text-xs text-gray-300">Starting Point</span>
+                    <span className="text-xs text-gray-300">Starting Point (Check-in)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-purple-500"></div>
                     <span className="text-xs text-gray-300">Current Location</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-purple-400 border-2 border-white flex items-center justify-center text-[8px] font-bold text-white">1</div>
+                    <span className="text-xs text-gray-300">Location Points (numbered)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <MapPin size={14} className="text-brand-400" />
                     <span className="text-xs text-gray-300">
-                      {routeHistory.length} waypoints tracked
+                      {routeHistory.length} location pings captured
                     </span>
                   </div>
                 </div>
