@@ -14,6 +14,7 @@ import UserLocationMap from '../components/UserLocationMap';
 import LocationTimeline from '../components/LocationTimeline';
 import QuickLeadCapture from '../components/QuickLeadCapture';
 import CheckInOutButton from '../components/CheckInOutButton';
+import TrainingPopup from '../components/TrainingPopup';
 
 const fadeUp = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
 
@@ -26,10 +27,11 @@ export default function Dashboard() {
   const [xp, setXp] = useState(0);
   const [elapsedTime, setElapsedTime] = useState('');
   const [locationView, setLocationView] = useState('map'); // 'map' or 'timeline'
+  const [pendingTraining, setPendingTraining] = useState(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => { loadStats(); loadXp(); if (user?.role !== 'SALES_EXECUTIVE') loadSalesActivity(); if (user) loadAttendance(); }, [user]);
+  useEffect(() => { loadStats(); loadXp(); if (user?.role !== 'SALES_EXECUTIVE') loadSalesActivity(); if (user) loadAttendance(); checkPendingTraining(); }, [user]);
 
   // Timer effect for showing elapsed time since check-in
   useEffect(() => {
@@ -82,6 +84,30 @@ export default function Dashboard() {
       setAttendance(res.data?.attendance || null);
     } catch {
       setAttendance(null);
+    }
+  };
+
+  const checkPendingTraining = async () => {
+    if (user?.role === 'ADMIN') return; // Admins don't need training
+    
+    try {
+      const res = await api.get('/training/my-modules');
+      const modules = res.data.modules || [];
+      
+      // Find first incomplete training that's scheduled for today or past
+      const now = new Date();
+      const incomplete = modules.find(m => {
+        const scheduledDate = new Date(m.scheduledDate);
+        const isScheduled = scheduledDate <= now;
+        const notCompleted = !m.completion || !m.completion.quizCompleted;
+        return isScheduled && notCompleted;
+      });
+      
+      if (incomplete) {
+        setPendingTraining(incomplete);
+      }
+    } catch (err) {
+      console.error('Failed to check pending training:', err);
     }
   };
 
@@ -575,6 +601,17 @@ export default function Dashboard() {
 
     {/* Quick Lead Capture - For all users except ADMIN */}
     {user?.role !== 'ADMIN' && <QuickLeadCapture />}
+
+    {/* Training Popup - Shows when there's pending training */}
+    {pendingTraining && (
+      <TrainingPopup
+        module={pendingTraining}
+        onComplete={() => {
+          setPendingTraining(null);
+          toast.success('Training completed successfully!');
+        }}
+      />
+    )}
     </>
   );
 }
